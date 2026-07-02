@@ -1,0 +1,17 @@
+node_modules/
+dist/
+release/*.zip
+release/.extension-package/
+release/.source-package/
+
+.env
+.env.*
+*.log
+*.tmp
+
+coverage/
+.vite/
+.turbo/
+
+Thumbs.db
+Desktop.ini

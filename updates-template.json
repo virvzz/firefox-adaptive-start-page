@@ -1,0 +1,17 @@
+{
+  "addons": {
+    "@firefox-adaptive-start-page": {
+      "updates": [
+        {
+          "version": "0.1.1",
+          "update_link": "https://github.com/virvzz/firefox-adaptive-start-page/releases/download/v0.1.1/firefox-adaptive-start-page-0.1.1.xpi",
+          "applications": {
+            "gecko": {
+              "strict_min_version": "115.0"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

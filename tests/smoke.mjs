@@ -1,0 +1,840 @@
+import { createRequire } from 'node:module';
+import { existsSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
+import { createServer } from 'node:net';
+
+const require = createRequire(import.meta.url);
+const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const viteBin = join(rootDir, 'node_modules', 'vite', 'bin', 'vite.js');
+const bundledNodeModules = 'C:/Users/1/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules';
+
+function findBundledPackageCandidates(packageName) {
+  const pnpmDir = join(bundledNodeModules, '.pnpm');
+  try {
+    return readdirSync(pnpmDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith(`${packageName}@`))
+      .map((entry) => join(pnpmDir, entry.name, 'node_modules', packageName))
+      .sort()
+      .reverse();
+  } catch {
+    return [];
+  }
+}
+
+const bundledPlaywrightCandidates = [
+  process.env.FASP_PLAYWRIGHT_PATH,
+  ...findBundledPackageCandidates('playwright'),
+  `${bundledNodeModules}/playwright`,
+].filter(Boolean);
+
+function loadPlaywright() {
+  try {
+    return require('playwright');
+  } catch {
+    for (const candidate of bundledPlaywrightCandidates) {
+      if (existsSync(candidate)) return require(candidate);
+    }
+    throw new Error('Playwright is not installed. Install playwright locally or set FASP_PLAYWRIGHT_PATH.');
+  }
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+function run(command, args, label) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd: rootDir,
+      stdio: 'inherit',
+      shell: false,
+    });
+    child.on('error', reject);
+    child.on('exit', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${label} exited with code ${code}`));
+    });
+  });
+}
+
+function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : 4173;
+      server.close(() => resolve(port));
+    });
+    server.on('error', reject);
+  });
+}
+
+async function waitForServer(url, processRef) {
+  const started = Date.now();
+  while (Date.now() - started < 15000) {
+    if (processRef.exitCode !== null) {
+      throw new Error(`Preview server exited early with code ${processRef.exitCode}`);
+    }
+    try {
+      const response = await fetch(url);
+      if (response.ok) return;
+    } catch {
+      // Server is not ready yet.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  throw new Error(`Timed out waiting for ${url}`);
+}
+
+function startPreview(port) {
+  return spawn(process.execPath, [
+    viteBin,
+    'preview',
+    '--host',
+    '127.0.0.1',
+    '--port',
+    String(port),
+    '--strictPort',
+  ], {
+    cwd: rootDir,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    shell: false,
+  });
+}
+
+function findInstalledChromium() {
+  const candidates = [
+    process.env.FASP_BROWSER_EXECUTABLE,
+    'C:/Program Files/Google/Chrome/Application/chrome.exe',
+    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+    'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+    'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  ].filter(Boolean);
+  return candidates.find((candidate) => existsSync(candidate));
+}
+
+async function launchChromium(chromium) {
+  try {
+    return await chromium.launch({ headless: true });
+  } catch (error) {
+    const executablePath = findInstalledChromium();
+    if (!executablePath) throw error;
+    return await chromium.launch({ headless: true, executablePath });
+  }
+}
+
+async function stopPreview(processRef) {
+  if (!processRef || processRef.exitCode !== null) return;
+  processRef.kill();
+  await new Promise((resolve) => processRef.once('exit', resolve));
+}
+
+const browserMockScript = () => {
+  const bookmarkTree = [
+    {
+      id: 'root________',
+      title: '',
+      children: [
+        {
+          id: 'toolbar_____',
+          title: 'Избранное',
+          children: [
+            {
+              id: 'bookmark-folder-work',
+              title: 'Работа',
+              index: 0,
+              children: [
+                { id: 'bookmark-work-1', title: 'Example', url: 'https://example.com', index: 0 },
+                { id: 'bookmark-work-2', title: 'Docs', url: 'https://developer.mozilla.org', index: 1 },
+              ],
+            },
+            {
+              id: 'bookmark-folder-dev',
+              title: 'Разработка',
+              index: 1,
+              children: [
+                { id: 'bookmark-dev-1', title: 'React', url: 'https://react.dev', index: 0 },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ];
+
+  function clone(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
+  function findNode(nodes, id) {
+    for (const node of nodes) {
+      if (node.id === id) return node;
+      if (node.children) {
+        const found = findNode(node.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function readStorage() {
+    try {
+      return JSON.parse(localStorage.getItem('__fasp_mock_storage__') || '{}');
+    } catch {
+      return {};
+    }
+  }
+
+  function writeStorage(data) {
+    localStorage.setItem('__fasp_mock_storage__', JSON.stringify(data));
+  }
+
+  window.browser = {
+    storage: {
+      local: {
+        async get(keys) {
+          const data = readStorage();
+          if (!keys) return clone(data);
+          if (typeof keys === 'string') return { [keys]: data[keys] };
+          if (Array.isArray(keys)) {
+            return Object.fromEntries(keys.map((key) => [key, data[key]]));
+          }
+          if (typeof keys === 'object') {
+            return Object.fromEntries(Object.entries(keys).map(([key, fallback]) => [key, data[key] ?? fallback]));
+          }
+          return {};
+        },
+        async set(items) {
+          writeStorage({ ...readStorage(), ...items });
+        },
+        async remove(keys) {
+          const data = readStorage();
+          for (const key of Array.isArray(keys) ? keys : [keys]) delete data[key];
+          writeStorage(data);
+        },
+        async clear() {
+          writeStorage({});
+        },
+      },
+    },
+    runtime: {
+      onMessage: { addListener() {}, removeListener() {} },
+      async sendMessage(message) {
+        if (message?.type === 'get-bookmarks') return clone(bookmarkTree);
+        return null;
+      },
+    },
+    bookmarks: {
+      async getTree() {
+        return clone(bookmarkTree);
+      },
+      async getSubTree(id) {
+        const node = findNode(bookmarkTree, id);
+        return node ? [clone(node)] : [];
+      },
+      async create(details) {
+        return {
+          id: `created-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          title: details.title || '',
+          url: details.url,
+          parentId: details.parentId,
+          index: details.index ?? 0,
+          children: details.url ? undefined : [],
+        };
+      },
+      async update(id, changes) {
+        return { id, ...changes };
+      },
+      async remove() {},
+      async removeTree() {},
+      async move(id, destination) {
+        return { id, ...destination };
+      },
+    },
+    tabs: {
+      async query() { return []; },
+      async create() { return {}; },
+      async update() { return {}; },
+    },
+    topSites: {
+      async get() {
+        return [
+          { title: 'Example', url: 'https://example.com' },
+          { title: 'MDN', url: 'https://developer.mozilla.org' },
+        ];
+      },
+    },
+    sessions: {
+      async getRecentlyClosed() {
+        return [
+          { tab: { title: 'Closed Example', url: 'https://closed.example', sessionId: 'closed-1' } },
+        ];
+      },
+      async restore() { return {}; },
+    },
+    contextualIdentities: {
+      async query() { return []; },
+    },
+  };
+};
+
+async function clearAppData(page, baseUrl) {
+  await page.goto(`${baseUrl}/newtab.html`, { waitUntil: 'domcontentloaded' });
+  await page.evaluate(async () => {
+    localStorage.clear();
+    if (indexedDB.databases) {
+      const databases = await indexedDB.databases();
+      await Promise.all(
+        databases
+          .map((database) => database.name)
+          .filter(Boolean)
+          .map((name) => new Promise((resolve) => {
+            const request = indexedDB.deleteDatabase(name);
+            request.onsuccess = request.onerror = request.onblocked = () => resolve();
+          }))
+      );
+    }
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="tile-surface-root"]').waitFor({ state: 'visible' });
+}
+
+async function putMediaAsset(page, assetId) {
+  await page.evaluate(async (id) => {
+    const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAGklEQVR42mP8z8Dwn4GBgYERJjDgAABQYQICZ6eL8QAAAABJRU5ErkJggg==';
+    const bytes = Uint8Array.from(atob(pngBase64), (char) => char.charCodeAt(0));
+    const blob = new Blob([bytes], { type: 'image/png' });
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('fasp-media-assets', 1);
+      request.onupgradeneeded = () => {
+        const database = request.result;
+        if (!database.objectStoreNames.contains('assets')) {
+          database.createObjectStore('assets', { keyPath: 'id' });
+        }
+      };
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    await new Promise((resolve, reject) => {
+      const transaction = db.transaction('assets', 'readwrite');
+      transaction.objectStore('assets').put({
+        id,
+        kind: 'wallpaper',
+        blob,
+        mimeType: 'image/png',
+        width: 2,
+        height: 2,
+        createdAt: Date.now(),
+        originalBytes: blob.size,
+      });
+      transaction.oncomplete = () => {
+        db.close();
+        resolve();
+      };
+      transaction.onerror = () => reject(transaction.error);
+    });
+  }, assetId);
+}
+
+async function setBookmarkMode(page, mode) {
+  await page.evaluate(async (nextMode) => {
+    await window.browser.storage.local.set({
+      'fasp-settings': {
+        borderRadiusDefault: 12,
+        tileOpacityDefault: 0.9,
+        showSearchBar: false,
+        showClock: false,
+        showWeather: false,
+        weatherLocation: '',
+        weatherDisplayMode: 'inline',
+        searchBarWidth: 60,
+        searchResultLimit: 50,
+        bookmarkFolderMode: nextMode,
+      },
+    });
+  }, mode);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="tile-surface-root"]').waitFor({ state: 'visible' });
+}
+
+async function createTile(page, title, url) {
+  await page.locator('[data-testid="add-tile-button"]').first().click();
+  await page.locator('[data-testid="add-tile-modal"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="add-tile-url"]').fill(url);
+  await page.locator('[data-testid="add-tile-title"]').fill(title);
+  await page.locator('[data-testid="create-tile-button"]').click();
+  await page.locator('[data-testid="add-tile-modal"]').waitFor({ state: 'detached' });
+}
+
+async function addBookmarkFolder(page, expectedMode) {
+  await page.locator('[data-testid="add-tile-button"]').first().click();
+  await page.locator('[data-testid="add-tile-modal"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="add-tab-folder"]').click();
+  await page.locator('[data-testid="bookmark-folder-row"]').first().waitFor({ state: 'visible' });
+  await page.locator('[data-testid="bookmark-folder-row"][data-bookmark-folder-id="bookmark-folder-work"]').click();
+  await page.locator('[data-testid="add-bookmark-folder-button"]').click();
+  await page.locator('[data-testid="add-tile-modal"]').waitFor({ state: 'detached' });
+  await page.locator(`[data-testid="tile-card"][data-tile-type="folder"][data-folder-mode="${expectedMode}"]`).waitFor({ state: 'visible' });
+}
+
+async function smokeDnd(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await createTile(page, 'Alpha', 'https://alpha.example');
+  await createTile(page, 'Beta', 'https://beta.example');
+
+  const rootSurface = page.locator('[data-testid="tile-surface-root"]');
+  const tiles = rootSurface.locator('[data-testid="tile-card"][data-tile-type="tile"]');
+  await expectCount(tiles, 2, 'Two manually created tiles should be visible before DnD');
+
+  const first = await tiles.nth(0).boundingBox();
+  const second = await tiles.nth(1).boundingBox();
+  assert(first && second, 'Tile bounding boxes should be available for DnD');
+
+  await page.mouse.move(first.x + first.width / 2, first.y + first.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(second.x + second.width + 12, second.y + second.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+
+  await expectCount(rootSurface.locator('[data-testid="tile-card"][data-tile-type="tile"]'), 2, 'DnD smoke should keep two tiles on root surface');
+}
+
+async function smokeReferenceClone(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await setBookmarkMode(page, 'reference');
+  await addBookmarkFolder(page, 'reference');
+
+  await clearAppData(page, baseUrl);
+  await setBookmarkMode(page, 'clone');
+  await addBookmarkFolder(page, 'clone');
+}
+
+async function smokeThemeEngine(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await page.locator('[data-testid="settings-button"]').click();
+  await page.locator('[data-testid="settings-modal"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="settings-section-themes"]').click();
+  await page.locator('[data-testid="theme-live-stage"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="theme-preset-card"][data-theme-id="nord-glass"] [data-testid="theme-apply-button"]').click();
+  await page.waitForTimeout(100);
+
+  const accent = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--fasp-accent').trim());
+  assert(accent.length > 0, 'Theme Engine should expose the active accent CSS variable');
+}
+
+async function smokeLayoutSettings(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await page.locator('[data-testid="settings-button"]').click();
+  await page.locator('[data-testid="settings-modal"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="theme-live-preview"]').waitFor({ state: 'visible' });
+  const themePreviewMetrics = await page.evaluate(() => {
+    const panel = document.querySelector('.theme-live-preview-panel');
+    const stage = document.querySelector('.theme-live-stage');
+    const panelRect = panel?.getBoundingClientRect();
+    const stageRect = stage?.getBoundingClientRect();
+    return {
+      panel: panelRect ? { width: panelRect.width, height: panelRect.height } : null,
+      stage: stageRect ? { width: stageRect.width, height: stageRect.height } : null,
+    };
+  });
+
+  await page.locator('[data-testid="settings-section-layout"]').click();
+  await page.locator('.layout-live-preview-panel').waitFor({ state: 'visible' });
+
+  const dropdowns = page.locator('.settings-layout-controls .settings-dropdown-trigger');
+  await expectCount(dropdowns, 5, 'Layout settings should expose five dropdown controls');
+  await expectCount(page.locator('.layout-grid-preview-panel'), 0, 'Legacy layout preview should not be rendered');
+
+  const sliders = page.locator('.settings-layout-controls input[type="range"]');
+  await expectCount(sliders, 3, 'Layout settings should expose three slider controls');
+  for (const index of [0, 1]) {
+    const box = await sliders.nth(index).boundingBox();
+    assert(box, `Layout slider ${index + 1} should have a bounding box`);
+    await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
+  }
+  await page.waitForTimeout(100);
+
+  const baseMetrics = await page.evaluate(() => {
+    const preview = document.querySelector('.layout-live-preview-panel');
+    const stage = document.querySelector('.layout-live-stage');
+    const previewRect = preview?.getBoundingClientRect();
+    const stageRect = stage?.getBoundingClientRect();
+    const rootGrid = document.querySelector('.layout-live-grid');
+    const folderGrid = document.querySelector('.layout-live-folder');
+    return {
+      bodyOverflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      contentOverflowX: document.querySelector('.settings-modal-content')
+        ? document.querySelector('.settings-modal-content').scrollWidth - document.querySelector('.settings-modal-content').clientWidth
+        : 0,
+      panel: previewRect ? { width: previewRect.width, height: previewRect.height } : null,
+      stage: stageRect ? { width: stageRect.width, height: stageRect.height } : null,
+      stageFits: stage ? stage.scrollHeight <= stage.clientHeight + 1 : false,
+      rootTiles: document.querySelectorAll('.layout-live-grid .layout-preview-tile').length,
+      folderTiles: document.querySelectorAll('.layout-live-folder .layout-preview-tile').length,
+      rootColumns: rootGrid ? getComputedStyle(rootGrid).gridTemplateColumns.split(' ').length : 0,
+      folderColumns: folderGrid ? getComputedStyle(folderGrid).gridTemplateColumns.split(' ').length : 0,
+    };
+  });
+  assert(baseMetrics.bodyOverflowX === 0, 'Layout settings should not create page-level horizontal overflow');
+  assert(baseMetrics.contentOverflowX === 0, 'Layout settings should not create modal horizontal overflow');
+  assert(themePreviewMetrics.panel && baseMetrics.panel, 'Both live preview panels should be measurable');
+  assert(
+    Math.abs(themePreviewMetrics.panel.width - baseMetrics.panel.width) <= 1
+      && Math.abs(themePreviewMetrics.panel.height - baseMetrics.panel.height) <= 1,
+    'Theme and layout live preview panels should share the same size'
+  );
+  assert(baseMetrics.panel.width >= 500, 'Layout live preview should be wide enough for dense previews');
+  assert(baseMetrics.panel.height >= 560, 'Layout live preview should be taller than the compact card');
+  assert(baseMetrics.stageFits, 'Layout live preview stage should fit without internal scrolling');
+  assert(baseMetrics.rootTiles === 12 && baseMetrics.rootColumns === 12, 'Layout preview should render 12 root columns at the maximum setting');
+  assert(baseMetrics.folderTiles === 12 && baseMetrics.folderColumns === 12, 'Layout preview should render 12 folder columns at the maximum setting');
+
+  await dropdowns.nth(0).click();
+  await page.locator('.settings-dropdown-menu .settings-dropdown-option').nth(2).click();
+  await page.locator('.layout-preview-thumbnail').first().waitFor({ state: 'visible' });
+  await expectCount(page.locator('.layout-preview-favicon-badge'), 0, 'Thumbnail mode should hide favicon badges in the preview');
+
+  await dropdowns.nth(1).click();
+  await page.locator('.settings-dropdown-menu .settings-dropdown-option').nth(1).click();
+  const denseMetrics = await page.evaluate(() => {
+    const denseTitles = Array.from(document.querySelectorAll('.layout-live-grid-dense .layout-preview-title'));
+    return {
+      denseTitleCount: denseTitles.length,
+      visibleDenseTitleCount: denseTitles.filter((title) => getComputedStyle(title).display !== 'none').length,
+    };
+  });
+  assert(denseMetrics.denseTitleCount > 0, 'Dense preview should contain tile titles to compact');
+  assert(denseMetrics.visibleDenseTitleCount === 0, 'Dense thumbnail previews should hide cramped labels');
+
+  await dropdowns.nth(2).click();
+  await page.locator('.settings-dropdown-menu .settings-dropdown-option').nth(1).click();
+  await page.locator('.layout-live-folder-list').waitFor({ state: 'visible' });
+  const listMetrics = await page.evaluate(() => {
+    const stage = document.querySelector('.layout-live-stage');
+    const listTiles = Array.from(document.querySelectorAll('.layout-live-folder-list .layout-preview-tile'));
+    const thumbnails = Array.from(document.querySelectorAll('.layout-live-folder-list .layout-preview-thumbnail'));
+    return {
+      folderTileCount: document.querySelectorAll('.layout-live-folder-list .layout-preview-tile').length,
+      stageFits: stage ? stage.scrollHeight <= stage.clientHeight + 1 : false,
+      maxTileHeight: listTiles.reduce((height, tile) => Math.max(height, tile.getBoundingClientRect().height), 0),
+      maxThumbnailWidth: thumbnails.reduce((width, thumbnail) => Math.max(width, thumbnail.getBoundingClientRect().width), 0),
+    };
+  });
+  assert(listMetrics.folderTileCount === 2, 'List preview should stay compact');
+  assert(listMetrics.stageFits, 'List preview should fit without internal scrolling');
+  assert(listMetrics.maxTileHeight <= 56, 'List preview rows should not expand into thumbnail cards');
+  assert(listMetrics.maxThumbnailWidth <= 36, 'Thumbnail mode in list preview should use compact thumbnails');
+
+  await dropdowns.nth(3).click();
+  await page.locator('.settings-dropdown-menu .settings-dropdown-option').nth(1).click();
+  await page.locator('.layout-live-context-demo-active').waitFor({ state: 'visible' });
+
+  await dropdowns.nth(3).click();
+  await page.locator('.settings-dropdown-menu .settings-dropdown-option').nth(2).click();
+  await expectCount(page.locator('.layout-live-context-demo-active'), 0, 'Off focus mode should disable preview dimming');
+}
+
+async function smokeStartupFolderState(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await page.evaluate(async () => {
+    const now = Date.now();
+    const folderId = 'folder-stale-open';
+    const childId = 'tile-inside-stale-folder';
+    await window.browser.storage.local.set({
+      'fasp.grid-state': {
+        schemaVersion: 3,
+        state: {
+          items: {
+            [folderId]: {
+              id: folderId,
+              type: 'folder',
+              title: 'test',
+              childrenIds: [childId],
+              source: 'manual',
+              createdAt: now,
+              updatedAt: now,
+              order: 0,
+            },
+            [childId]: {
+              id: childId,
+              type: 'tile',
+              title: 'Inside stale folder',
+              url: 'https://inside.example',
+              source: 'manual',
+              createdAt: now,
+              updatedAt: now,
+              order: 0,
+            },
+          },
+          containers: {
+            root: {
+              id: 'root',
+              title: 'Root',
+              childrenIds: [folderId],
+              createdAt: now,
+              updatedAt: now,
+            },
+            [folderId]: {
+              id: folderId,
+              title: 'test',
+              childrenIds: [childId],
+              parentId: 'root',
+              createdAt: now,
+              updatedAt: now,
+            },
+          },
+          rootContainerId: 'root',
+          currentContainerId: folderId,
+          containerStack: ['root', folderId],
+          dragState: null,
+        },
+      },
+    });
+  });
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="tile-surface-root"]').waitFor({ state: 'visible' });
+  await expectCount(page.locator('[data-folder-overlay]'), 0, 'Startup should not restore an open folder overlay');
+
+  const storedNavigation = await page.evaluate(async () => {
+    const result = await window.browser.storage.local.get('fasp.grid-state');
+    const state = result['fasp.grid-state']?.state;
+    return {
+      currentContainerId: state?.currentContainerId,
+      containerStack: state?.containerStack,
+      dragState: state?.dragState,
+    };
+  });
+  assert(storedNavigation.currentContainerId === 'root', 'Startup should reset persisted currentContainerId to root');
+  assert(Array.isArray(storedNavigation.containerStack) && storedNavigation.containerStack.join(',') === 'root', 'Startup should reset persisted containerStack to root only');
+  assert(storedNavigation.dragState === null, 'Startup should reset persisted dragState');
+}
+
+async function smokeTileTitleTooltip(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  const longTitle = 'Very long tile title that should appear completely inside the delayed accent tooltip';
+  await createTile(page, longTitle, 'https://tooltip.example');
+
+  const tile = page.locator('[data-testid="tile-card"][data-tile-type="tile"]').first();
+  await tile.hover();
+  await page.waitForTimeout(1100);
+  await page.locator('.tile-title-tooltip').waitFor({ state: 'visible' });
+
+  const tooltipMetrics = await page.evaluate((expectedTitle) => {
+    const tooltip = document.querySelector('.tile-title-tooltip');
+    const rect = tooltip?.getBoundingClientRect();
+    const style = tooltip ? getComputedStyle(tooltip) : null;
+    return {
+      text: tooltip?.textContent || '',
+      visible: Boolean(rect && rect.width > 0 && rect.height > 0),
+      backgroundImage: style?.backgroundImage || '',
+      backgroundColor: style?.backgroundColor || '',
+      pointerEvents: style?.pointerEvents || '',
+      matchesTitle: tooltip?.textContent === expectedTitle,
+    };
+  }, longTitle);
+
+  assert(tooltipMetrics.matchesTitle, 'Tile title tooltip should show the complete tile title');
+  assert(tooltipMetrics.visible, 'Tile title tooltip should be visible after hover delay');
+  assert(tooltipMetrics.pointerEvents === 'none', 'Tile title tooltip should not capture pointer events');
+  assert(
+    tooltipMetrics.backgroundImage.includes('gradient') || tooltipMetrics.backgroundColor !== 'rgba(0, 0, 0, 0)',
+    'Tile title tooltip should use an opaque accent surface'
+  );
+
+  await page.mouse.move(4, 4);
+  await page.waitForTimeout(100);
+  await expectCount(page.locator('.tile-title-tooltip'), 0, 'Tile title tooltip should hide when the pointer leaves');
+}
+
+async function smokeStartupBackgroundHydration(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await page.addInitScript(() => {
+    window.__faspBackgroundKindsAfterReady = [];
+    const recordBackgroundKind = () => {
+      if (document.documentElement.dataset.faspVisualReady !== 'true') return;
+      const kind = document.querySelector('[data-testid="background-layer"]')?.getAttribute('data-background-kind');
+      if (kind) window.__faspBackgroundKindsAfterReady.push(kind);
+    };
+    const installObserver = () => {
+      if (!document.documentElement) {
+        setTimeout(installObserver, 0);
+        return;
+      }
+      const observer = new MutationObserver(recordBackgroundKind);
+      observer.observe(document.documentElement, {
+        attributes: true,
+        childList: true,
+        subtree: true,
+      });
+    };
+    installObserver();
+    document.addEventListener('DOMContentLoaded', () => {
+      requestAnimationFrame(recordBackgroundKind);
+    }, { once: true });
+  });
+
+  const assetId = 'asset_smoke_static_wallpaper';
+  await putMediaAsset(page, assetId);
+  await page.evaluate(async (staticImageAssetId) => {
+    const theme = {
+      schemaVersion: 1,
+      engineVersion: '1.0.0',
+      id: 'smoke-static-theme',
+      name: 'Smoke Static Theme',
+      colors: {
+        accent: '#f97316',
+        accent2: '#22d3ee',
+        text: '#f8fafc',
+        mutedText: 'rgba(248, 250, 252, 0.52)',
+        surface: 'rgba(255, 255, 255, 0.08)',
+        surfaceStrong: 'rgba(15, 23, 42, 0.86)',
+        border: 'rgba(255, 255, 255, 0.14)',
+        danger: '#fb7185',
+      },
+      glass: { enabled: true, blur: 18, opacity: 0.88, saturation: 140 },
+      tiles: { radius: 20, opacity: 0.9, shadow: 'deep', hoverScale: 1.03 },
+      layout: { spacing: 12 },
+      background: {
+        style: 'static',
+        staticImageAssetId,
+        gradient: 'linear-gradient(135deg, #05070d, #101827)',
+      },
+      animation: { speed: 'normal' },
+      font: { family: 'system' },
+    };
+    await window.browser.storage.local.set({
+      'fasp-theme-engine': {
+        schemaVersion: 1,
+        activeThemeId: theme.id,
+        customThemes: [theme],
+      },
+    });
+  }, assetId);
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="tile-surface-root"]').waitFor({ state: 'visible' });
+
+  const metrics = await page.evaluate(() => ({
+    visualReady: document.documentElement.dataset.faspVisualReady,
+    themeBackground: document.documentElement.dataset.faspThemeBackground,
+    backgroundKind: document.querySelector('[data-testid="background-layer"]')?.getAttribute('data-background-kind'),
+    backgroundKindsAfterReady: window.__faspBackgroundKindsAfterReady || [],
+    bootScreenCount: document.querySelectorAll('.app-boot-screen').length,
+    canvasCount: document.querySelectorAll('canvas[data-testid="background-layer"]').length,
+  }));
+
+  assert(metrics.visualReady === 'true', 'Startup should mark visual hydration as ready');
+  assert(metrics.themeBackground === 'static', 'Startup should apply the persisted static theme before rendering');
+  assert(metrics.backgroundKind === 'theme-static', 'Startup should render the persisted static theme background');
+  assert(metrics.bootScreenCount === 0, 'Startup boot screen should be removed after hydration');
+  assert(metrics.canvasCount === 0, 'Static theme startup should not render a generative canvas fallback');
+  assert(
+    metrics.backgroundKindsAfterReady.every((kind) => kind === 'theme-static'),
+    `Only the final static theme background should appear after visual ready. Saw: ${metrics.backgroundKindsAfterReady.join(', ')}`
+  );
+
+  await clearAppData(page, baseUrl);
+  const configAssetId = 'asset_smoke_config_static_wallpaper';
+  await putMediaAsset(page, configAssetId);
+  await page.evaluate(async (staticImageAssetId) => {
+    await window.browser.storage.local.set({
+      'fasp-theme-engine': {
+        schemaVersion: 1,
+        activeThemeId: 'fasp-default',
+        customThemes: [],
+      },
+      'fasp-background': {
+        mode: 'static',
+        staticImageAssetId,
+        generativeType: 'reaction-diffusion',
+        animationEnabled: true,
+        fpsLimit: 30,
+        blur: 1,
+        brightness: 0.8,
+      },
+    });
+  }, configAssetId);
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="tile-surface-root"]').waitFor({ state: 'visible' });
+
+  const configMetrics = await page.evaluate(() => ({
+    visualReady: document.documentElement.dataset.faspVisualReady,
+    themeBackground: document.documentElement.dataset.faspThemeBackground,
+    backgroundKind: document.querySelector('[data-testid="background-layer"]')?.getAttribute('data-background-kind'),
+    backgroundKindsAfterReady: window.__faspBackgroundKindsAfterReady || [],
+    bootScreenCount: document.querySelectorAll('.app-boot-screen').length,
+    canvasCount: document.querySelectorAll('canvas[data-testid="background-layer"]').length,
+  }));
+
+  assert(configMetrics.visualReady === 'true', 'Config static startup should mark visual hydration as ready');
+  assert(configMetrics.themeBackground === 'current', 'Config static startup should keep the theme background in current mode');
+  assert(configMetrics.backgroundKind === 'config-static', 'Config static startup should render the persisted static background');
+  assert(configMetrics.bootScreenCount === 0, 'Config static startup boot screen should be removed after hydration');
+  assert(configMetrics.canvasCount === 0, 'Config static startup should not render a generative canvas fallback');
+  assert(
+    configMetrics.backgroundKindsAfterReady.every((kind) => kind === 'config-static'),
+    `Only the final config static background should appear after visual ready. Saw: ${configMetrics.backgroundKindsAfterReady.join(', ')}`
+  );
+}
+
+async function expectCount(locator, expected, message) {
+  const count = await locator.count();
+  assert(count === expected, `${message}. Expected ${expected}, got ${count}`);
+}
+
+async function main() {
+  assert(existsSync(viteBin), `Vite binary not found at ${viteBin}`);
+  const { chromium } = loadPlaywright();
+  await run(process.execPath, [viteBin, 'build'], 'vite build');
+
+  const port = await getFreePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  let preview;
+  let browser;
+  try {
+    preview = startPreview(port);
+    preview.stdout.on('data', () => {});
+    preview.stderr.on('data', (chunk) => process.stderr.write(chunk));
+    await waitForServer(`${baseUrl}/newtab.html`, preview);
+    browser = await launchChromium(chromium);
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 820 },
+      reducedMotion: 'reduce',
+    });
+    await context.addInitScript(browserMockScript);
+
+    const page = await context.newPage();
+    const failures = [];
+    page.on('pageerror', (error) => failures.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() !== 'error') return;
+      const text = message.text();
+      if (text.startsWith('Failed to load resource:')) return;
+      failures.push(text);
+    });
+
+    await smokeDnd(page, baseUrl);
+    await smokeReferenceClone(page, baseUrl);
+    await smokeThemeEngine(page, baseUrl);
+    await smokeLayoutSettings(page, baseUrl);
+    await smokeStartupFolderState(page, baseUrl);
+    await smokeTileTitleTooltip(page, baseUrl);
+    await smokeStartupBackgroundHydration(page, baseUrl);
+
+    assert(failures.length === 0, `Browser errors during smoke run:\n${failures.join('\n')}`);
+    console.log('Smoke tests passed: DnD, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Startup Background Hydration');
+  } finally {
+    if (browser) await browser.close();
+    await stopPreview(preview);
+  }
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

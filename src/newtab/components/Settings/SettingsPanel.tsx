@@ -1,0 +1,1 @@
+export { SettingsModal as SettingsPanel } from './SettingsModal';
