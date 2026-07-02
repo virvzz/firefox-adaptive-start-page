@@ -1,6 +1,6 @@
 {
   "addons": {
-    "@firefox-adaptive-start-page": {
+    "@adaptive-start-page": {
       "updates": []
     }
   }

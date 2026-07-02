@@ -1740,12 +1740,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   F
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white">Firefox Adaptive Start Page</h3>
+                  <h3 className="text-base font-bold text-white">Adaptive Start Page</h3>
                   <p className="text-sm text-white/40">Версия 0.1.1</p>
                 </div>
               </div>
               <p className="text-sm text-white/50 leading-relaxed">
-                Полностью настраиваемая стартовая страница для Firefox с плитками быстрого доступа,
+                Полностью настраиваемая стартовая страница с плитками быстрого доступа,
                 генеративными фонами, интеграцией с закладками и синхронизацией между устройствами.
               </p>
               <div className="mt-4 space-y-1.5 text-xs text-white/30">

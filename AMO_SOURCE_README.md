@@ -1,4 +1,4 @@
-# Firefox Adaptive Start Page source package
+# Adaptive Start Page source package
 
 This source package is provided for Mozilla Add-ons review.
 

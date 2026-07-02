@@ -111,7 +111,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $dist 'manifest.json'))) {
 
 $manifest = Get-Content -LiteralPath (Join-Path $dist 'manifest.json') -Raw | ConvertFrom-Json
 $version = $manifest.version
-$baseName = "firefox-adaptive-start-page-$version"
+$baseName = "adaptive-start-page-$version"
 
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 

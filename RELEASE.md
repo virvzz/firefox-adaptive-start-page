@@ -28,8 +28,8 @@ npm.cmd run release:package
 
 The script creates:
 
-- `release/firefox-adaptive-start-page-<version>-unlisted.zip`
-- `release/firefox-adaptive-start-page-<version>-source.zip`
+- `release/adaptive-start-page-<version>-unlisted.zip`
+- `release/adaptive-start-page-<version>-source.zip`
 
 Upload the `unlisted.zip` file to AMO. If AMO asks for source code, upload the
 `source.zip` file.
@@ -52,14 +52,14 @@ the JSON manifest using `updates-template.json` as the starting point.
 1. Open Mozilla Add-ons Developer Hub.
 2. Choose Submit a New Add-on.
 3. Choose self-distribution / unlisted / On your own.
-4. Upload `release/firefox-adaptive-start-page-<version>-unlisted.zip`.
+4. Upload `release/adaptive-start-page-<version>-unlisted.zip`.
 5. Address validation warnings if there are any.
 6. Upload the source package if requested.
 7. Download the signed `.xpi` from AMO and install it in Firefox.
 
 ## Important
 
-- Keep the extension ID stable: `@firefox-adaptive-start-page`.
+- Keep the extension ID stable: `@adaptive-start-page`.
 - Increment `version` in `public/manifest.json` and `package.json` before each new
   AMO upload.
 - The archive uploaded to AMO must contain `manifest.json` at the archive root,

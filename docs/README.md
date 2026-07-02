@@ -1,4 +1,4 @@
-# Firefox Adaptive Start Page updates
+# Adaptive Start Page updates
 
 This folder is intended for GitHub Pages hosting.
 

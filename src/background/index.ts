@@ -1,4 +1,4 @@
-// Background script for FASP (Firefox Adaptive Start Page)
+// Background script for Adaptive Start Page
 // Handles bookmark change listeners and communication
 
 let bookmarkListenerActive = false;
