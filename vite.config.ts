@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
-import { copyFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
+import { copyFileSync, mkdirSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 
 // Custom plugin to copy manifest and icons from public to dist root
 function copyPublicAssets() {
@@ -41,8 +41,53 @@ function copyPublicAssets() {
   };
 }
 
+// AMO flags React DOM's unused innerHTML runtime branches in the bundled file.
+// The app never renders <script> or dangerouslySetInnerHTML, so release builds
+// disable those branches to keep the package review surface quiet.
+function stripReactDomUnsafeInnerHtmlBranches() {
+  return {
+    name: 'strip-react-dom-unsafe-inner-html-branches',
+    closeBundle() {
+      const bundlePath = path.resolve(__dirname, 'dist', 'newtab.js');
+      if (!existsSync(bundlePath)) return;
+
+      let code = readFileSync(bundlePath, 'utf8');
+      const replacements = [
+        {
+          label: 'React script element innerHTML bootstrap',
+          expectedCount: 1,
+          from: 'case`script`:o=s.createElement(`div`),o.innerHTML=`<script><\\/script>`,o=o.removeChild(o.firstChild);break;',
+          to: 'case`script`:o=s.createElement(`script`);break;',
+        },
+        {
+          label: 'React dangerouslySetInnerHTML assignment',
+          expectedCount: 2,
+          from: 'case`dangerouslySetInnerHTML`:if(r!=null){if(typeof r!=`object`||!(`__html`in r))throw Error(i(61));if(n=r.__html,n!=null){if(a.children!=null)throw Error(i(60));e.innerHTML=n}}break;',
+          to: 'case`dangerouslySetInnerHTML`:if(r!=null)throw Error(`dangerouslySetInnerHTML is disabled in this extension`);break;',
+        },
+      ];
+
+      for (const replacement of replacements) {
+        const count = code.split(replacement.from).length - 1;
+        if (count !== replacement.expectedCount) {
+          throw new Error(
+            `${replacement.label}: expected ${replacement.expectedCount} occurrence(s), found ${count}.`
+          );
+        }
+        code = code.split(replacement.from).join(replacement.to);
+      }
+
+      if (/\.\s*innerHTML\s*=/.test(code)) {
+        throw new Error('Release bundle still contains an innerHTML assignment.');
+      }
+
+      writeFileSync(bundlePath, code, 'utf8');
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), copyPublicAssets()],
+  plugins: [react(), tailwindcss(), copyPublicAssets(), stripReactDomUnsafeInnerHtmlBranches()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
