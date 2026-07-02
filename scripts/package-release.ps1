@@ -53,6 +53,48 @@ function Copy-IfExists {
   }
 }
 
+function New-ZipFromDirectory {
+  param(
+    [Parameter(Mandatory = $true)][string]$SourceDirectory,
+    [Parameter(Mandatory = $true)][string]$DestinationPath
+  )
+
+  Add-Type -AssemblyName System.IO.Compression
+  Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+  $sourceRoot = (Get-FullPath $SourceDirectory).TrimEnd(
+    [System.IO.Path]::DirectorySeparatorChar,
+    [System.IO.Path]::AltDirectorySeparatorChar
+  )
+
+  if (Test-Path -LiteralPath $DestinationPath) {
+    Remove-Item -LiteralPath $DestinationPath -Force
+  }
+
+  $archive = [System.IO.Compression.ZipFile]::Open($DestinationPath, [System.IO.Compression.ZipArchiveMode]::Create)
+  try {
+    $files = Get-ChildItem -LiteralPath $SourceDirectory -File -Recurse | Sort-Object FullName
+    foreach ($file in $files) {
+      $fullPath = Get-FullPath $file.FullName
+      $relativePath = $fullPath.Substring($sourceRoot.Length + 1)
+      $entryName = $relativePath.Replace('\', '/')
+      $entry = $archive.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal)
+      $entry.LastWriteTime = $file.LastWriteTime
+
+      $entryStream = $entry.Open()
+      $fileStream = [System.IO.File]::OpenRead($fullPath)
+      try {
+        $fileStream.CopyTo($entryStream)
+      } finally {
+        $fileStream.Dispose()
+        $entryStream.Dispose()
+      }
+    }
+  } finally {
+    $archive.Dispose()
+  }
+}
+
 Set-Location $root
 
 $npmCommand = 'npm'
@@ -113,17 +155,18 @@ if ($UpdateUrl) {
 }
 
 Write-Host 'Creating AMO upload archive...'
-Compress-Archive -Path (Join-Path $extensionStage '*') -DestinationPath $extensionZip -Force
+New-ZipFromDirectory -SourceDirectory $extensionStage -DestinationPath $extensionZip
 
 New-Item -ItemType Directory -Path $sourceStage -Force | Out-Null
 
-$sourceDirs = @('public', 'scripts', 'src', 'tests')
+$sourceDirs = @('docs', 'public', 'scripts', 'src', 'tests')
 foreach ($dir in $sourceDirs) {
   Copy-IfExists -Source (Join-Path $root $dir) -Destination $sourceStage
 }
 
 $sourceFiles = @(
   'AMO_SOURCE_README.md',
+  'LICENSE',
   'MIGRATION.md',
   'package-lock.json',
   'package.json',
@@ -140,7 +183,7 @@ foreach ($file in $sourceFiles) {
 }
 
 Write-Host 'Creating AMO source archive...'
-Compress-Archive -Path (Join-Path $sourceStage '*') -DestinationPath $sourceZip -Force
+New-ZipFromDirectory -SourceDirectory $sourceStage -DestinationPath $sourceZip
 
 Remove-PathIfExists $extensionStage
 Remove-PathIfExists $sourceStage
