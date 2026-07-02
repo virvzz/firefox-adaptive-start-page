@@ -171,6 +171,7 @@ $sourceFiles = @(
   'package-lock.json',
   'package.json',
   'RELEASE.md',
+  'REVIEWER_NOTES.md',
   'TILE_INTERACTION_ENGINE.md',
   'tsconfig.json',
   'updates-template.json',

@@ -7,7 +7,7 @@
           "update_link": "https://github.com/virvzz/firefox-adaptive-start-page/releases/download/v0.1.1/adaptive-start-page-0.1.1.xpi",
           "applications": {
             "gecko": {
-              "strict_min_version": "115.0"
+              "strict_min_version": "142.0"
             }
           }
         }

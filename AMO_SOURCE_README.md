@@ -31,6 +31,6 @@ npm.cmd run release:package
 - The extension uses React, TypeScript, Vite, Tailwind CSS, Zustand, idb, and dnd-kit.
 - The production JavaScript is bundled and minified by Vite.
 - No build-time secrets are required.
-- The extension targets Firefox Desktop. Firefox for Android is not declared in
+- The extension targets Firefox Desktop 142.0 and newer. Firefox for Android is not declared in
   `browser_specific_settings` because the new tab override and bookmark APIs used
   by this project are not supported there.
