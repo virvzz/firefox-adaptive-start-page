@@ -755,6 +755,26 @@ async function writePersistedState(state: AppState): Promise<void> {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
 }
 
+export function createPersistedGridState(state: AppState): PersistedState {
+  return {
+    schemaVersion: GRID_SCHEMA_VERSION,
+    state: resetTransientNavigationState(state),
+  };
+}
+
+export function normalizePersistedGridState(value: unknown): PersistedState {
+  if (!isPersistedState(value)) {
+    throw new Error('Invalid profile grid state');
+  }
+
+  const state = migratePersistedState(value, 'profile-import');
+  if (!state) {
+    throw new Error('Unsupported profile grid state');
+  }
+
+  return createPersistedGridState(state);
+}
+
 async function optimizeAppStateMedia(state: AppState): Promise<{ state: AppState; optimized: number }> {
   const next = cloneAppState(state);
   let optimized = 0;

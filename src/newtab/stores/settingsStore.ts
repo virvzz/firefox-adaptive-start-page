@@ -31,7 +31,7 @@ interface SettingsState {
 }
 
 const STORAGE_KEY = 'fasp-settings';
-const DEFAULT_SETTINGS: AppSettings = {
+export const DEFAULT_SETTINGS: AppSettings = {
   borderRadiusDefault: 12,
   tileOpacityDefault: 0.9,
   showSearchBar: false,
@@ -71,7 +71,7 @@ function clearWeatherCache(): void {
   }
 }
 
-function normalizeSettings(raw: Partial<AppSettings> | Record<string, unknown> | null | undefined): AppSettings {
+export function normalizeSettings(raw: Partial<AppSettings> | Record<string, unknown> | null | undefined): AppSettings {
   const source = raw || {};
   const normalized = { ...DEFAULT_SETTINGS };
 

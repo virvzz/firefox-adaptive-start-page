@@ -10,6 +10,7 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { PRESET_THEMES, useThemeStore } from '../../stores/themeStore';
 import { useTileStore } from '../../stores/tilesStore';
 import { saveImageAssetFromDataUrl } from '../../media/mediaAssets';
+import { exportProfileJson, importProfileJson } from '../../profile/profileTransfer';
 import type { AppSettings, LayoutConfig, ThemeDefinition, ThemeShadowPreset } from '../../../types';
 
 type Section =
@@ -434,6 +435,7 @@ function WeatherLocationField({
 export function SettingsModal({ onClose }: SettingsModalProps) {
   const [activeSection, setActiveSection] = useState<Section>('themes');
   const importThemeRef = useRef<HTMLInputElement>(null);
+  const importProfileRef = useRef<HTMLInputElement>(null);
   const wallpaperInputRef = useRef<HTMLInputElement>(null);
   const customThemeWallpaperInputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
@@ -445,6 +447,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [customThemesExpanded, setCustomThemesExpanded] = useState(false);
   const [customThemeWallpaperTargetId, setCustomThemeWallpaperTargetId] = useState<string | null>(null);
   const [mediaOptimizationStatus, setMediaOptimizationStatus] = useState<string | null>(null);
+  const [profileTransferStatus, setProfileTransferStatus] = useState<string | null>(null);
+  const [profileTransferBusy, setProfileTransferBusy] = useState(false);
 
   const { config: layout, setColumns, setFolderColumns, setSpacing } = useLayoutStore();
   const {
@@ -631,6 +635,64 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     };
     reader.readAsText(file);
   }, [importThemeJson]);
+
+  const handleExportProfile = useCallback(async () => {
+    setProfileTransferBusy(true);
+    setProfileTransferStatus(null);
+    try {
+      const exported = await exportProfileJson();
+      const blob = new Blob([exported.json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = exported.filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      setProfileTransferStatus(
+        `Профиль сохранён: плиток ${exported.summary.tileCount}, папок ${exported.summary.folderCount}, тем ${exported.summary.customThemeCount}, изображений ${exported.summary.mediaAssetCount}.`
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Не удалось экспортировать профиль.';
+      setProfileTransferStatus(message);
+    } finally {
+      setProfileTransferBusy(false);
+    }
+  }, []);
+
+  const handleImportProfile = useCallback((file: File) => {
+    const accepted = window.confirm(
+      'Импорт профиля заменит текущие плитки, папки, тему, фон и настройки. Продолжить?'
+    );
+    if (!accepted) {
+      if (importProfileRef.current) importProfileRef.current.value = '';
+      return;
+    }
+
+    setProfileTransferBusy(true);
+    setProfileTransferStatus(null);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const summary = await importProfileJson(String(reader.result || ''));
+        setProfileTransferStatus(
+          `Профиль импортирован: плиток ${summary.tileCount}, папок ${summary.folderCount}, тем ${summary.customThemeCount}, изображений ${summary.mediaAssetCount}.`
+        );
+        setActiveSection('sync');
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Не удалось импортировать профиль.';
+        setProfileTransferStatus(message);
+      } finally {
+        setProfileTransferBusy(false);
+        if (importProfileRef.current) importProfileRef.current.value = '';
+      }
+    };
+    reader.onerror = () => {
+      setProfileTransferStatus('Не удалось прочитать файл профиля.');
+      setProfileTransferBusy(false);
+      if (importProfileRef.current) importProfileRef.current.value = '';
+    };
+    reader.readAsText(file);
+  }, []);
 
   const updateThemeColors = useCallback((colors: Partial<ThemeDefinition['colors']>) => {
     updatePreviewTheme({ colors });
@@ -1624,20 +1686,97 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         return (
           <div className="animate-[fadeIn_0.25s ease-out] space-y-3">
             <h2 className="text-lg font-bold text-white">Синхронизация</h2>
-            <p className="text-sm text-white/40">Синхронизация настроек между устройствами</p>
+            <p className="text-sm text-white/40">Перенос профиля между устройствами и резервные копии.</p>
 
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-center">
-              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" className="mx-auto mb-3 opacity-30">
-                <path d="M38 22a14 14 0 0 0-27-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                <path d="M10 26a14 14 0 0 0 27 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                <path d="M6 14v8h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M42 34v-8h-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <p className="text-sm text-white/30">
-                Синхронизация настроек через Firefox Sync и облачные сервисы
-                (Dropbox, Google Drive) будет доступна в будущих обновлениях.
-              </p>
-            </div>
+            <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+              <div className="mb-4 flex items-start gap-3">
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white"
+                  style={{ background: 'linear-gradient(135deg, var(--fasp-accent), var(--fasp-accent-2))' }}
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M7 3h7l4 4v14H7V3Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                    <path d="M14 3v5h5" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                    <path d="M9.5 13h5M9.5 17h3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-white/85">Профиль стартовой страницы</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-white/42">
+                    В профиль входят тема, сохранённые обои, плитки, папки, порядок на главной странице, макет и настройки.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  data-testid="profile-export-button"
+                  onClick={() => void handleExportProfile()}
+                  disabled={profileTransferBusy}
+                  className="flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 disabled:cursor-wait disabled:opacity-55"
+                  style={{
+                    background: 'linear-gradient(135deg, var(--fasp-accent), color-mix(in srgb, var(--fasp-accent-2) 38%, var(--fasp-accent)))',
+                    color: 'var(--fasp-on-accent)',
+                    boxShadow: '0 10px 26px color-mix(in srgb, var(--fasp-accent) 24%, transparent)',
+                  }}
+                >
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 3v11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="m7.5 9.5 4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M5 19h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  Экспортировать профиль
+                </button>
+                <button
+                  type="button"
+                  data-testid="profile-import-button"
+                  onClick={() => importProfileRef.current?.click()}
+                  disabled={profileTransferBusy}
+                  className="flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.055] px-4 py-3 text-sm font-semibold text-white/72 transition-all duration-200 hover:bg-white/[0.09] hover:text-white disabled:cursor-wait disabled:opacity-55"
+                >
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 21V10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="m7.5 14.5 4.5-4.5 4.5 4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M5 5h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  Импортировать профиль
+                </button>
+              </div>
+
+              <input
+                ref={importProfileRef}
+                data-testid="profile-import-input"
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) handleImportProfile(file);
+                }}
+              />
+
+              {profileTransferStatus && (
+                <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs leading-relaxed text-white/60">
+                  {profileTransferStatus}
+                </p>
+              )}
+            </section>
+
+            <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+              <div className="flex items-start gap-3 text-white/36">
+                <svg width="34" height="34" viewBox="0 0 48 48" fill="none" className="shrink-0 opacity-70" aria-hidden="true">
+                  <path d="M38 22a14 14 0 0 0-27-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M10 26a14 14 0 0 0 27 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M6 14v8h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M42 34v-8h-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <p className="text-sm leading-relaxed">
+                  Автоматическая синхронизация через Firefox Sync и облачные сервисы будет добавлена позже.
+                  Сейчас профиль можно перенести вручную одним файлом.
+                </p>
+              </div>
+            </section>
           </div>
         );
 
@@ -1741,7 +1880,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">Adaptive Start Page</h3>
-                  <p className="text-sm text-white/40">Версия 0.1.1</p>
+                  <p className="text-sm text-white/40">Версия 0.1.2</p>
                 </div>
               </div>
               <p className="text-sm text-white/50 leading-relaxed">

@@ -12,6 +12,15 @@ interface LayoutState {
 }
 
 const STORAGE_KEY = 'fasp-layout';
+export const DEFAULT_LAYOUT_CONFIG: LayoutConfig = { columns: 6, folderColumns: 6, spacing: 12 };
+
+export function normalizeLayoutConfig(raw: Partial<LayoutConfig> | null | undefined): LayoutConfig {
+  return {
+    columns: Math.max(2, Math.min(12, Math.round(Number(raw?.columns ?? DEFAULT_LAYOUT_CONFIG.columns)))),
+    folderColumns: Math.max(2, Math.min(12, Math.round(Number(raw?.folderColumns ?? Math.min(Number(raw?.columns ?? DEFAULT_LAYOUT_CONFIG.columns), 6))))),
+    spacing: Math.max(4, Math.min(40, Math.round(Number(raw?.spacing ?? DEFAULT_LAYOUT_CONFIG.spacing)))),
+  };
+}
 
 async function saveToStorage(config: LayoutConfig): Promise<void> {
   if (typeof browser !== 'undefined' && browser.storage?.local) {
@@ -22,24 +31,18 @@ async function saveToStorage(config: LayoutConfig): Promise<void> {
 }
 
 async function loadFromStorage(): Promise<LayoutConfig> {
-  const normalizeLayout = (raw: Partial<LayoutConfig> | null | undefined): LayoutConfig => ({
-    columns: Math.max(2, Math.min(12, Math.round(Number(raw?.columns ?? 6)))),
-    folderColumns: Math.max(2, Math.min(12, Math.round(Number(raw?.folderColumns ?? Math.min(Number(raw?.columns ?? 6), 6))))),
-    spacing: Math.max(4, Math.min(40, Math.round(Number(raw?.spacing ?? 12)))),
-  });
-
   if (typeof browser !== 'undefined' && browser.storage?.local) {
     const result = await browser.storage.local.get(STORAGE_KEY);
-    if (result[STORAGE_KEY]) return normalizeLayout(result[STORAGE_KEY] as Partial<LayoutConfig>);
+    if (result[STORAGE_KEY]) return normalizeLayoutConfig(result[STORAGE_KEY] as Partial<LayoutConfig>);
   } else {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return normalizeLayout(JSON.parse(stored) as Partial<LayoutConfig>);
+    if (stored) return normalizeLayoutConfig(JSON.parse(stored) as Partial<LayoutConfig>);
   }
-  return { columns: 6, folderColumns: 6, spacing: 12 };
+  return DEFAULT_LAYOUT_CONFIG;
 }
 
 export const useLayoutStore = create<LayoutState>((set, get) => ({
-  config: { columns: 6, folderColumns: 6, spacing: 12 },
+  config: DEFAULT_LAYOUT_CONFIG,
   loading: false,
 
   loadLayout: async () => {

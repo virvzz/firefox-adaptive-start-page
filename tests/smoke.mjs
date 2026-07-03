@@ -782,6 +782,148 @@ async function smokeStartupBackgroundHydration(page, baseUrl) {
   );
 }
 
+async function smokeProfileTransfer(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  const assetId = 'asset_smoke_profile_wallpaper';
+  await putMediaAsset(page, assetId);
+  await page.evaluate(async (staticImageAssetId) => {
+    await window.browser.storage.local.set({
+      'fasp-settings': {
+        showSearchBar: true,
+        showClock: true,
+        showWeather: false,
+        weatherLocation: '',
+        weatherDisplayMode: 'inline',
+        searchBarWidth: 72,
+        searchResultLimit: 25,
+        bookmarkFolderMode: 'clone',
+        showFolderItemCount: true,
+        showFolderModeBadge: true,
+        tileVisualMode: 'mixed',
+        tileLabelMode: 'full',
+        folderViewMode: 'list',
+        contextMenuFocusMode: 'always',
+      },
+      'fasp-layout': {
+        columns: 9,
+        folderColumns: 7,
+        spacing: 18,
+      },
+      'fasp-background': {
+        mode: 'static',
+        staticImageAssetId,
+        generativeType: 'aurora',
+        animationEnabled: false,
+        fpsLimit: 24,
+        blur: 2,
+        brightness: 0.9,
+      },
+    });
+  }, assetId);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="tile-surface-root"]').waitFor({ state: 'visible' });
+  await createTile(page, 'Profile Alpha', 'https://profile-alpha.example');
+  await createTile(page, 'Profile Beta', 'https://profile-beta.example');
+
+  await page.locator('[data-testid="settings-button"]').click();
+  await page.locator('[data-testid="settings-modal"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="settings-section-sync"]').click();
+  await page.locator('[data-testid="profile-export-button"]').waitFor({ state: 'visible' });
+  await page.evaluate(() => {
+    window.__faspExportedProfileText = '';
+    window.__faspExportedProfileName = '';
+    const originalCreateObjectURL = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (blob) => {
+      if (blob instanceof Blob && blob.type === 'application/json') {
+        void blob.text().then((text) => {
+          window.__faspExportedProfileText = text;
+        });
+      }
+      return originalCreateObjectURL(blob);
+    };
+    HTMLAnchorElement.prototype.click = function clickProfileAnchor() {
+      window.__faspExportedProfileName = this.download || '';
+    };
+  });
+  await page.locator('[data-testid="profile-export-button"]').click();
+  await page.waitForFunction(() => Boolean(window.__faspExportedProfileText));
+
+  const exported = await page.evaluate(() => ({
+    name: window.__faspExportedProfileName,
+    text: window.__faspExportedProfileText,
+    parsed: JSON.parse(window.__faspExportedProfileText),
+  }));
+  assert(exported.name.endsWith('.json'), 'Profile export should use a JSON filename');
+  assert(exported.parsed.profile === 'adaptive-start-page', 'Profile export should mark the profile format');
+  assert(exported.parsed.data.background.staticImageAssetId === assetId, 'Profile export should include the saved wallpaper reference');
+  assert(exported.parsed.mediaAssets.length === 1, 'Profile export should include referenced media assets');
+  assert(Object.keys(exported.parsed.data.tiles.state.items).length === 2, 'Profile export should include current tiles');
+
+  await page.evaluate(async () => {
+    const now = Date.now();
+    await window.browser.storage.local.set({
+      'fasp-settings': { showClock: false },
+      'fasp-layout': { columns: 2, folderColumns: 2, spacing: 4 },
+      'fasp-background': { mode: 'generative', animationEnabled: true, fpsLimit: 30, blur: 0, brightness: 1 },
+      'fasp.grid-state': {
+        schemaVersion: 3,
+        state: {
+          items: {},
+          containers: {
+            root: {
+              id: 'root',
+              title: 'Root',
+              childrenIds: [],
+              createdAt: now,
+              updatedAt: now,
+            },
+          },
+          rootContainerId: 'root',
+          currentContainerId: 'root',
+          containerStack: ['root'],
+          dragState: null,
+        },
+      },
+    });
+  });
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.locator('[data-testid="profile-import-input"]').setInputFiles({
+    name: 'adaptive-start-page-profile-smoke.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(exported.text, 'utf8'),
+  });
+  await page.locator('text=Профиль импортирован').waitFor({ state: 'visible' });
+
+  const restored = await page.evaluate(async () => {
+    const data = await window.browser.storage.local.get([
+      'fasp-settings',
+      'fasp-layout',
+      'fasp-background',
+      'fasp.grid-state',
+    ]);
+    const state = data['fasp.grid-state']?.state;
+    return {
+      showClock: data['fasp-settings']?.showClock,
+      folderViewMode: data['fasp-settings']?.folderViewMode,
+      columns: data['fasp-layout']?.columns,
+      folderColumns: data['fasp-layout']?.folderColumns,
+      staticImageAssetId: data['fasp-background']?.staticImageAssetId,
+      currentContainerId: state?.currentContainerId,
+      titles: Object.values(state?.items || {}).map((item) => item.title).sort(),
+    };
+  });
+  assert(restored.showClock === true, 'Profile import should restore settings');
+  assert(restored.folderViewMode === 'list', 'Profile import should restore layout-related settings');
+  assert(restored.columns === 9 && restored.folderColumns === 7, 'Profile import should restore layout config');
+  assert(restored.staticImageAssetId === assetId, 'Profile import should restore wallpaper asset references');
+  assert(restored.currentContainerId === 'root', 'Profile import should keep grid navigation reset to root');
+  assert(
+    restored.titles.join(',') === 'Profile Alpha,Profile Beta',
+    `Profile import should restore tile titles. Saw: ${restored.titles.join(',')}`
+  );
+}
+
 async function expectCount(locator, expected, message) {
   const count = await locator.count();
   assert(count === expected, `${message}. Expected ${expected}, got ${count}`);
@@ -825,9 +967,10 @@ async function main() {
     await smokeStartupFolderState(page, baseUrl);
     await smokeTileTitleTooltip(page, baseUrl);
     await smokeStartupBackgroundHydration(page, baseUrl);
+    await smokeProfileTransfer(page, baseUrl);
 
     assert(failures.length === 0, `Browser errors during smoke run:\n${failures.join('\n')}`);
-    console.log('Smoke tests passed: DnD, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Startup Background Hydration');
+    console.log('Smoke tests passed: DnD, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Startup Background Hydration, Profile Transfer');
   } finally {
     if (browser) await browser.close();
     await stopPreview(preview);

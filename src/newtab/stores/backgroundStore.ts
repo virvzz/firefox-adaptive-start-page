@@ -31,7 +31,7 @@ const STATIC_IMAGE_LOCAL_STORAGE_KEY = 'fasp-background-static-image';
 let assetDbPromise: Promise<IDBPDatabase> | null = null;
 let staticImageObjectUrl: string | undefined;
 
-const defaultConfig: BackgroundConfig = {
+export const DEFAULT_BACKGROUND_CONFIG: BackgroundConfig = {
   mode: 'generative',
   generativeType: 'perlin',
   animationEnabled: true,
@@ -46,13 +46,13 @@ function stripStaticImage(config: BackgroundConfig): BackgroundConfig {
   return next;
 }
 
-function normalizeConfig(config: Partial<BackgroundConfig> | null | undefined): BackgroundConfig {
+export function normalizeBackgroundConfig(config: Partial<BackgroundConfig> | null | undefined): BackgroundConfig {
   return {
-    ...defaultConfig,
+    ...DEFAULT_BACKGROUND_CONFIG,
     ...(config || {}),
-    fpsLimit: Math.max(1, Math.min(60, Number(config?.fpsLimit ?? defaultConfig.fpsLimit))),
-    blur: Math.max(0, Math.min(20, Number(config?.blur ?? defaultConfig.blur))),
-    brightness: Math.max(0.1, Math.min(3, Number(config?.brightness ?? defaultConfig.brightness))),
+    fpsLimit: Math.max(1, Math.min(60, Number(config?.fpsLimit ?? DEFAULT_BACKGROUND_CONFIG.fpsLimit))),
+    blur: Math.max(0, Math.min(20, Number(config?.blur ?? DEFAULT_BACKGROUND_CONFIG.blur))),
+    brightness: Math.max(0.1, Math.min(3, Number(config?.brightness ?? DEFAULT_BACKGROUND_CONFIG.brightness))),
   };
 }
 
@@ -145,7 +145,7 @@ async function loadConfig(): Promise<BackgroundConfig> {
     if (stored) storedConfig = JSON.parse(stored) as BackgroundConfig;
   }
 
-  let config = normalizeConfig(storedConfig);
+  let config = normalizeBackgroundConfig(storedConfig);
   logStartupDebug('background:config:loaded-persisted', {
     hasStoredConfig: Boolean(storedConfig),
     mode: config.mode,
@@ -192,7 +192,7 @@ async function loadConfig(): Promise<BackgroundConfig> {
 }
 
 export const useBackgroundStore = create<BackgroundState>((set, get) => ({
-  config: defaultConfig,
+  config: DEFAULT_BACKGROUND_CONFIG,
   loading: false,
 
   loadBackground: async () => {

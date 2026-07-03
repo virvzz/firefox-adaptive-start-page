@@ -40,7 +40,7 @@ export function isImageDataUrl(value: unknown): value is string {
   return typeof value === 'string' && /^data:image\/[a-z0-9.+-]+;base64,/i.test(value);
 }
 
-function dataUrlToBlob(dataUrl: string): Blob {
+export function dataUrlToBlob(dataUrl: string): Blob {
   const [header, payload] = dataUrl.split(',');
   const mimeType = header.match(/^data:([^;]+);/i)?.[1] || 'application/octet-stream';
   const binary = atob(payload || '');
@@ -171,6 +171,11 @@ export async function readMediaAssetBlob(assetId: string | undefined): Promise<B
 export async function readMediaAssetAsDataUrl(assetId: string | undefined): Promise<string | null> {
   const blob = await readMediaAssetBlob(assetId);
   return blob ? blobToDataUrl(blob) : null;
+}
+
+export async function writeMediaAssetRecord(record: MediaAssetRecord): Promise<void> {
+  const db = await getMediaDb();
+  await db.put(MEDIA_STORE_NAME, record);
 }
 
 export async function deleteMediaAsset(assetId: string | undefined): Promise<void> {
