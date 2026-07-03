@@ -1,10 +1,16 @@
-# Adaptive Start Page source package
+# Adaptive Start Page
 
-This source package is provided for Mozilla Add-ons review. It contains the
-human-written project source, package metadata, build script, tests, and review
-notes. Third-party dependencies are not bundled; install them with `npm ci`.
+Adaptive Start Page is a Firefox new tab extension with customizable tiles,
+folders, themes, generated backgrounds, local profile import/export, and
+bookmarks integration.
 
-## Build environment
+## Mozilla Add-ons source review
+
+This repository contains the human-written project source, package metadata,
+build script, tests, and review notes. Third-party dependencies are not bundled;
+install them with `npm ci`.
+
+### Build environment
 
 Tested environment:
 
@@ -18,7 +24,7 @@ operating systems, but the included release packaging script is written for
 PowerShell. On Linux or macOS, install PowerShell 7 and run the same script from
 a PowerShell session.
 
-## Install required tools
+### Install required tools
 
 1. Install Node.js 20 LTS or newer from https://nodejs.org/
 2. Confirm the installed versions:
@@ -35,7 +41,7 @@ powershell -Version
 npm.cmd ci
 ```
 
-## Build the exact submitted extension package
+### Build the exact submitted extension package
 
 Run this from the source package root:
 
@@ -63,7 +69,7 @@ release/adaptive-start-page-0.1.2-source.zip
 The `adaptive-start-page-0.1.2-unlisted.zip` file is the extension package
 submitted for self-distribution signing.
 
-## Optional verification
+### Optional verification
 
 ```powershell
 npm.cmd run build
@@ -73,7 +79,7 @@ node.exe .\tests\smoke.mjs
 The smoke test builds the extension, starts a local Vite preview server, and
 checks the main new-tab workflows in a browser.
 
-## Project notes
+### Project notes
 
 - The extension uses React 19, TypeScript, Vite, Tailwind CSS, Zustand, idb, and
   dnd-kit.

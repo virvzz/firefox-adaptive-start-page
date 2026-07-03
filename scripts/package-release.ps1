@@ -170,6 +170,7 @@ $sourceFiles = @(
   'MIGRATION.md',
   'package-lock.json',
   'package.json',
+  'README.md',
   'RELEASE.md',
   'REVIEWER_NOTES.md',
   'TILE_INTERACTION_ENGINE.md',
