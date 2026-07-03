@@ -191,6 +191,8 @@ const browserMockScript = () => {
     localStorage.setItem('__fasp_mock_storage__', JSON.stringify(data));
   }
 
+  window.__faspOpenedUrls = [];
+
   window.browser = {
     storage: {
       local: {
@@ -255,8 +257,21 @@ const browserMockScript = () => {
     },
     tabs: {
       async query() { return []; },
-      async create() { return {}; },
-      async update() { return {}; },
+      async create(details = {}) {
+        window.__faspOpenedUrls.push({ kind: 'tab', ...details });
+        return { id: Date.now(), active: details.active ?? true, ...details };
+      },
+      async update(...args) {
+        const details = args.length === 1 ? args[0] : args[1];
+        window.__faspOpenedUrls.push({ kind: 'current', ...details });
+        return { id: 1, active: details?.active ?? true, ...details };
+      },
+    },
+    windows: {
+      async create(details = {}) {
+        window.__faspOpenedUrls.push({ kind: 'window', ...details });
+        return { id: Date.now(), tabs: [{ id: Date.now() + 1, url: details.url }] };
+      },
     },
     topSites: {
       async get() {
@@ -275,7 +290,12 @@ const browserMockScript = () => {
       async restore() { return {}; },
     },
     contextualIdentities: {
-      async query() { return []; },
+      async query() {
+        return [
+          { cookieStoreId: 'firefox-container-work', name: 'Work', color: 'blue', icon: 'briefcase' },
+          { cookieStoreId: 'firefox-container-personal', name: 'Personal', color: 'purple', icon: 'circle' },
+        ];
+      },
     },
   };
 };
@@ -284,6 +304,7 @@ async function clearAppData(page, baseUrl) {
   await page.goto(`${baseUrl}/newtab.html`, { waitUntil: 'domcontentloaded' });
   await page.evaluate(async () => {
     localStorage.clear();
+    window.__faspOpenedUrls = [];
     if (indexedDB.databases) {
       const databases = await indexedDB.databases();
       await Promise.all(
@@ -445,7 +466,7 @@ async function smokeLayoutSettings(page, baseUrl) {
   await page.locator('.layout-live-preview-panel').waitFor({ state: 'visible' });
 
   const dropdowns = page.locator('.settings-layout-controls .settings-dropdown-trigger');
-  await expectCount(dropdowns, 5, 'Layout settings should expose five dropdown controls');
+  await expectCount(dropdowns, 6, 'Layout settings should expose six dropdown controls');
   await expectCount(page.locator('.layout-grid-preview-panel'), 0, 'Legacy layout preview should not be rendered');
 
   const sliders = page.locator('.settings-layout-controls input[type="range"]');
@@ -648,6 +669,78 @@ async function smokeTileTitleTooltip(page, baseUrl) {
   await page.mouse.move(4, 4);
   await page.waitForTimeout(100);
   await expectCount(page.locator('.tile-title-tooltip'), 0, 'Tile title tooltip should hide when the pointer leaves');
+}
+
+async function smokeTileContainersAndOpenTarget(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await page.locator('[data-testid="add-tile-button"]').first().click();
+  await page.locator('[data-testid="add-tile-modal"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="add-tile-url"]').fill('https://container.example');
+  await page.locator('[data-testid="add-tile-title"]').fill('Container Tile');
+  await page.waitForFunction(() => !document.querySelector('[data-testid="add-tile-container-trigger"]')?.disabled);
+  await page.locator('[data-testid="add-tile-container-trigger"]').click();
+  await page.locator('[data-testid="add-tile-container-option"][data-container-id="firefox-container-work"]').click();
+  await page.locator('[data-testid="create-tile-button"]').click();
+  await page.locator('[data-testid="add-tile-modal"]').waitFor({ state: 'detached' });
+  await page.locator('.tile-container-badge').waitFor({ state: 'visible' });
+
+  await page.evaluate(() => { window.__faspOpenedUrls = []; });
+  await page.locator('[data-testid="tile-card"][data-tile-type="tile"]').first().click();
+  await page.waitForFunction(() => window.__faspOpenedUrls?.length === 1);
+  const containerOpen = await page.evaluate(() => window.__faspOpenedUrls[0]);
+  assert(containerOpen.kind === 'tab', 'Container tiles should open in a container tab when current tab target is selected');
+  assert(containerOpen.cookieStoreId === 'firefox-container-work', 'Container tile should pass the selected cookieStoreId');
+
+  await clearAppData(page, baseUrl);
+  await createTile(page, 'Window Tile', 'https://window-target.example');
+  await page.evaluate(async () => {
+    const result = await window.browser.storage.local.get('fasp-settings');
+    await window.browser.storage.local.set({
+      'fasp-settings': {
+        ...(result['fasp-settings'] || {}),
+        tileOpenTarget: 'new-window',
+      },
+    });
+    window.__faspOpenedUrls = [];
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="tile-surface-root"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="tile-card"][data-tile-type="tile"]').first().click();
+  await page.waitForFunction(() => window.__faspOpenedUrls?.length === 1);
+  const windowOpen = await page.evaluate(() => window.__faspOpenedUrls[0]);
+  assert(windowOpen.kind === 'window', 'New window open target should use the windows API');
+  assert(windowOpen.url === 'https://window-target.example', 'New window target should keep the tile URL');
+}
+
+async function smokeBulkTileAccent(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await createTile(page, 'Accent Alpha', 'https://accent-alpha.example');
+  await createTile(page, 'Accent Beta', 'https://accent-beta.example');
+
+  await page.locator('[data-testid="settings-button"]').click();
+  await page.locator('[data-testid="settings-modal"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="settings-section-layout"]').click();
+  await page.locator('[data-testid="tile-bulk-color-input"]').scrollIntoViewIfNeeded();
+  await page.locator('[data-testid="tile-bulk-color-input"]').fill('#22c55e');
+  await page.locator('[data-testid="tile-bulk-color-apply"]').click();
+  await page.waitForTimeout(100);
+
+  const appliedColors = await page.evaluate(async () => {
+    const result = await window.browser.storage.local.get('fasp.grid-state');
+    const items = Object.values(result['fasp.grid-state']?.state?.items || {});
+    return items.map((item) => item.tileAccentColor);
+  });
+  assert(appliedColors.length === 2, 'Bulk accent smoke should have two tiles');
+  assert(appliedColors.every((color) => color === '#22c55e'), 'Bulk accent should apply the selected color to every tile');
+
+  await page.locator('[data-testid="tile-bulk-color-clear"]').click();
+  await page.waitForTimeout(100);
+  const clearedColors = await page.evaluate(async () => {
+    const result = await window.browser.storage.local.get('fasp.grid-state');
+    const items = Object.values(result['fasp.grid-state']?.state?.items || {});
+    return items.map((item) => item.tileAccentColor);
+  });
+  assert(clearedColors.every((color) => color === undefined), 'Bulk accent reset should clear the shared tile accent');
 }
 
 async function smokeStartupBackgroundHydration(page, baseUrl) {
@@ -966,11 +1059,13 @@ async function main() {
     await smokeLayoutSettings(page, baseUrl);
     await smokeStartupFolderState(page, baseUrl);
     await smokeTileTitleTooltip(page, baseUrl);
+    await smokeTileContainersAndOpenTarget(page, baseUrl);
+    await smokeBulkTileAccent(page, baseUrl);
     await smokeStartupBackgroundHydration(page, baseUrl);
     await smokeProfileTransfer(page, baseUrl);
 
     assert(failures.length === 0, `Browser errors during smoke run:\n${failures.join('\n')}`);
-    console.log('Smoke tests passed: DnD, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Startup Background Hydration, Profile Transfer');
+    console.log('Smoke tests passed: DnD, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Tile Containers/Open Target, Bulk Tile Accent, Startup Background Hydration, Profile Transfer');
   } finally {
     if (browser) await browser.close();
     await stopPreview(preview);

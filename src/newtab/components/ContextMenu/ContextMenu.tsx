@@ -5,6 +5,13 @@ import type { Tile } from '../../../types';
 import { createThemeColorSwatches, normalizeThemeAccentColor } from '../../ui/themeColors';
 import { useThemeStore } from '../../stores/themeStore';
 import { useTileStore } from '../../stores/tilesStore';
+import { useSettingsStore } from '../../stores/settingsStore';
+import {
+  getContainerColor,
+  listFirefoxContainers,
+  openUrlFromStartPage,
+  type FirefoxContainer,
+} from '../../containers/firefoxContainers';
 
 interface ContextMenuProps {
   x: number;
@@ -14,35 +21,6 @@ interface ContextMenuProps {
   onClose: () => void;
   onOpenFolder?: (tile: Tile) => void;
 }
-
-interface FirefoxContainer {
-  cookieStoreId: string;
-  name: string;
-  color?: string;
-  icon?: string;
-}
-
-interface FirefoxBrowserApi {
-  contextualIdentities?: {
-    query: (details?: Record<string, never>) => Promise<FirefoxContainer[]>;
-  };
-  tabs?: {
-    create: (details: { url: string; active?: boolean; cookieStoreId?: string }) => Promise<unknown>;
-    update?: (details: { url: string }) => Promise<unknown>;
-  };
-}
-
-const containerColorMap: Record<string, string> = {
-  blue: '#37adff',
-  turquoise: '#00c79a',
-  green: '#51cd00',
-  yellow: '#ffcb00',
-  orange: '#ff9f00',
-  red: '#ff613d',
-  pink: '#ff4bda',
-  purple: '#af51f5',
-  toolbar: '#8b5cf6',
-};
 
 const CONTEXT_EDGE_GAP = 12;
 const CONTEXT_MIN_BOTTOM_GAP = 18;
@@ -67,37 +45,6 @@ function getContextBottomGap(): number {
 function normalizeUrl(url: string): string {
   const trimmed = url.trim();
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-}
-
-function getBrowserApi(): FirefoxBrowserApi | null {
-  if (typeof browser === 'undefined') return null;
-  return browser as unknown as FirefoxBrowserApi;
-}
-
-async function openUrlInCurrentTab(url: string): Promise<void> {
-  try {
-    const api = getBrowserApi();
-    if (api?.tabs?.update) {
-      await api.tabs.update({ url });
-      return;
-    }
-  } catch {
-    // Fall back to regular navigation below.
-  }
-  window.location.assign(url);
-}
-
-async function openUrlInNewTab(url: string, cookieStoreId?: string): Promise<void> {
-  try {
-    const api = getBrowserApi();
-    if (api?.tabs?.create) {
-      await api.tabs.create({ url, active: true, cookieStoreId });
-      return;
-    }
-  } catch {
-    // Fall back to a normal tab without a container.
-  }
-  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 async function copyText(text: string): Promise<void> {
@@ -324,6 +271,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
   const { runtimeTheme } = useThemeStore();
   const themeAccent = normalizeThemeAccentColor(runtimeTheme.colors.accent);
   const colorSwatches = useMemo(() => createThemeColorSwatches(themeAccent), [themeAccent]);
+  const { settings } = useSettingsStore();
   const {
     addTile,
     deleteTile,
@@ -348,6 +296,8 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
   const [showContainers, setShowContainers] = useState(false);
   const [containers, setContainers] = useState<FirefoxContainer[]>([]);
   const [containersLoading, setContainersLoading] = useState(false);
+  const [selectedContainerId, setSelectedContainerId] = useState('');
+  const [containerMenuOpen, setContainerMenuOpen] = useState(false);
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
   const [img, setImg] = useState('');
@@ -390,13 +340,12 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
   }, [folders, moveFolderQuery]);
 
   useEffect(() => {
-    if (!showContainers || containers.length > 0 || containersLoading) return;
-    const api = getBrowserApi();
-    if (!api?.contextualIdentities?.query) return;
+    const needsContainers = showContainers || showAdd || showEdit;
+    if (!needsContainers || containers.length > 0 || containersLoading) return;
 
     let cancelled = false;
     setContainersLoading(true);
-    api.contextualIdentities.query({})
+    listFirefoxContainers()
       .then((items) => {
         if (!cancelled) setContainers(items);
       })
@@ -410,7 +359,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
     return () => {
       cancelled = true;
     };
-  }, [containers.length, containersLoading, showContainers]);
+  }, [containers.length, containersLoading, showAdd, showContainers, showEdit]);
 
   useEffect(() => {
     if (!ref.current) return;
@@ -484,12 +433,99 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
     typeof document === 'undefined' ? content : createPortal(content, document.body)
   );
 
+  const getSelectedContainerFields = () => {
+    const selected = containers.find((container) => container.cookieStoreId === selectedContainerId);
+    const fallbackFromTile = tile?.containerCookieStoreId === selectedContainerId ? tile : undefined;
+    return {
+      containerCookieStoreId: selectedContainerId || undefined,
+      containerName: selectedContainerId ? selected?.name || fallbackFromTile?.containerName : undefined,
+      containerColor: selectedContainerId ? selected?.color || fallbackFromTile?.containerColor : undefined,
+    };
+  };
+
+  const containerOptions = (() => {
+    const options = [...containers];
+    const hasSelected = selectedContainerId
+      ? options.some((container) => container.cookieStoreId === selectedContainerId)
+      : true;
+    if (!hasSelected && tile?.containerCookieStoreId === selectedContainerId) {
+      options.unshift({
+        cookieStoreId: tile.containerCookieStoreId,
+        name: tile.containerName || 'Выбранный контейнер',
+        color: tile.containerColor,
+      });
+    }
+    return options;
+  })();
+
+  const renderContainerSelect = (testId: string) => {
+    const selectedContainer = containerOptions.find((container) => container.cookieStoreId === selectedContainerId);
+
+    return (
+      <div className="context-container-picker">
+        <button
+          type="button"
+          data-testid={`${testId}-trigger`}
+          className="context-container-trigger"
+          disabled={containersLoading}
+          aria-expanded={containerMenuOpen}
+          onClick={() => setContainerMenuOpen((open) => !open)}
+        >
+          <span className="context-container-trigger-label">
+            <span
+              className="context-container-dot"
+              style={{ background: selectedContainer ? getContainerColor(selectedContainer.color) : 'rgba(255,255,255,0.32)' }}
+            />
+            <span className="truncate">
+              {containersLoading ? 'Загрузка контейнеров...' : selectedContainer?.name || 'Без контейнера'}
+            </span>
+          </span>
+          <span className={`context-container-chevron ${containerMenuOpen ? 'context-container-chevron-open' : ''}`}>
+            ˅
+          </span>
+        </button>
+        {containerMenuOpen && !containersLoading && (
+          <div className="context-container-menu" data-testid={`${testId}-menu`}>
+            {[
+              { cookieStoreId: '', name: 'Без контейнера', color: undefined },
+              ...containerOptions,
+            ].map((container) => {
+              const selected = selectedContainerId === container.cookieStoreId;
+              return (
+                <button
+                  key={container.cookieStoreId || 'default-container'}
+                  type="button"
+                  data-testid={`${testId}-option`}
+                  data-container-id={container.cookieStoreId}
+                  className={`context-container-option ${selected ? 'context-container-option-active' : ''}`}
+                  onClick={() => {
+                    setSelectedContainerId(container.cookieStoreId);
+                    setContainerMenuOpen(false);
+                  }}
+                >
+                  <span
+                    className="context-container-dot"
+                    style={{ background: container.cookieStoreId ? getContainerColor(container.color) : 'rgba(255,255,255,0.32)' }}
+                  />
+                  <span className="truncate">{container.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        <input type="hidden" data-testid={testId} value={selectedContainerId} readOnly />
+      </div>
+    );
+  };
+
   const openEdit = () => {
     if (!tile) return;
     setUrl(tile.url || '');
     setTitle(tile.title);
     setImg(tile.customImage || tile.thumbnail || '');
     setColor(tile.dominantColor || colorSwatches[0]);
+    setSelectedContainerId(tile.containerCookieStoreId || '');
+    setContainerMenuOpen(false);
     setShowEdit(true);
   };
 
@@ -513,6 +549,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
         thumbnail: img ? undefined : getScreenshotThumbnailUrl(normalized),
         customImage: img || undefined,
         dominantColor: img ? undefined : color,
+        ...getSelectedContainerFields(),
         order: siblingCount,
         parentId: parentFolderId,
         createdAt: Date.now(),
@@ -578,6 +615,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
         customImage: img.trim() || undefined,
         thumbnail: img.trim() ? undefined : (normalized ? getScreenshotThumbnailUrl(normalized) : undefined),
         dominantColor: img.trim() ? undefined : tile.dominantColor,
+        ...getSelectedContainerFields(),
       });
       onClose();
     } catch {
@@ -687,7 +725,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
       return;
     }
     if (!tileUrl) return;
-    void openUrlInCurrentTab(tileUrl);
+    void openUrlFromStartPage(tileUrl, settings.tileOpenTarget, tile.containerCookieStoreId);
     onClose();
   };
 
@@ -735,6 +773,8 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
               </button>
             )}
           </label>
+
+          {renderContainerSelect('context-add-container-select')}
 
           <div className="context-color-strip" aria-label="Цвет плитки">
             <button type="button" className="context-color-globe" onClick={() => setColor(colorSwatches[0])} aria-label="Основной цвет">
@@ -860,6 +900,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
             className="w-full rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-sm text-white outline-none transition-all duration-300 placeholder-white/30 focus:border-white/30 focus:bg-white/[0.14]"
             autoFocus={tile.type === 'folder'}
           />
+          {tile.type === 'tile' && renderContainerSelect('context-edit-container-select')}
           <div className="flex items-center gap-2">
             <input
               placeholder="URL картинки или файл"
@@ -1055,7 +1096,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
 
           {tileUrl && (
             <>
-              <MenuItem icon="open" onClick={() => { void openUrlInNewTab(tileUrl); onClose(); }}>
+              <MenuItem icon="open" onClick={() => { void openUrlFromStartPage(tileUrl, 'new-tab', tile.containerCookieStoreId); onClose(); }}>
                 Открыть в новой вкладке
               </MenuItem>
               <MenuItem icon="open" onClick={() => setShowContainers((value) => !value)}>
@@ -1073,12 +1114,12 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
                     <button
                       key={container.cookieStoreId}
                       type="button"
-                      onClick={() => { void openUrlInNewTab(tileUrl, container.cookieStoreId); onClose(); }}
+                      onClick={() => { void openUrlFromStartPage(tileUrl, 'new-tab', container.cookieStoreId); onClose(); }}
                       className="context-submenu-row flex w-full items-center gap-2 truncate px-3 py-2 text-left text-xs text-white/65 transition-colors duration-300 hover:bg-white/10 hover:text-white"
                     >
                       <span
                         className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ background: containerColorMap[container.color || ''] || 'rgba(255,255,255,0.45)' }}
+                        style={{ background: getContainerColor(container.color) }}
                       />
                       <span className="truncate">{container.name}</span>
                     </button>
@@ -1195,7 +1236,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
         </>
       ) : (
         <>
-          <MenuItem icon="plus" onClick={() => { setUrl(''); setTitle(''); setImg(''); setColor(colorSwatches[0]); setShowAdd(true); }}>
+          <MenuItem icon="plus" onClick={() => { setUrl(''); setTitle(''); setImg(''); setColor(colorSwatches[0]); setSelectedContainerId(''); setContainerMenuOpen(false); setShowAdd(true); }}>
             Добавить сайт
           </MenuItem>
           <MenuItem icon="folder" onClick={() => { setFolderName(''); setColor(colorSwatches[0]); setFolderCreationMode('plain'); setShowFolder(true); }}>

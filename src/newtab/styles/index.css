@@ -1032,6 +1032,37 @@ html.fasp-dnd-active .tile-preview {
     linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 46%);
 }
 
+.tile-accent-wash {
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 18% 14%, color-mix(in srgb, var(--tile-accent-color) 42%, transparent), transparent 34%),
+    linear-gradient(135deg, color-mix(in srgb, var(--tile-accent-color) 20%, transparent), transparent 58%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--tile-accent-color) 48%, rgba(255, 255, 255, 0.08)),
+    inset 0 -22px 42px color-mix(in srgb, var(--tile-accent-color) 18%, transparent);
+  mix-blend-mode: screen;
+  opacity: 0.58;
+}
+
+.tile-card-accented:not(.tile-card-with-preview) .tile-accent-wash {
+  background:
+    radial-gradient(circle at 22% 18%, color-mix(in srgb, var(--tile-accent-color) 46%, rgba(255, 255, 255, 0.08)), transparent 36%),
+    linear-gradient(135deg, color-mix(in srgb, var(--tile-accent-color) 42%, rgba(255, 255, 255, 0.05)), rgba(7, 10, 20, 0.12));
+  mix-blend-mode: normal;
+  opacity: 0.72;
+}
+
+.tile-container-badge {
+  width: 10px;
+  height: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 999px;
+  box-shadow:
+    0 0 0 2px rgba(3, 7, 18, 0.52),
+    0 0 14px color-mix(in srgb, currentColor 28%, transparent);
+}
+
 .tile-title {
   max-width: 100%;
   padding-inline: 8px;
@@ -2103,6 +2134,25 @@ html.fasp-modern-surfaces .context-field input {
   padding: 0 44px 0 54px !important;
 }
 
+html.fasp-modern-surfaces .context-field select {
+  width: 100% !important;
+  height: 100% !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.88) !important;
+  font-size: 14px !important;
+  outline: none !important;
+  padding: 0 42px 0 60px !important;
+  appearance: none;
+}
+
+html.fasp-modern-surfaces .context-field select option {
+  background: #17141f;
+  color: #f8fafc;
+}
+
 html.fasp-modern-surfaces .context-panel .context-field input:not([type="file"]):not([type="color"]) {
   padding: 0 44px 0 60px !important;
   border: 0 !important;
@@ -2116,6 +2166,110 @@ html.fasp-modern-surfaces .context-folder-name-field input {
 
 html.fasp-modern-surfaces .context-panel .context-folder-name-field input:not([type="file"]):not([type="color"]) {
   padding-left: 18px !important;
+}
+
+html.fasp-modern-surfaces .context-container-picker {
+  position: relative;
+}
+
+html.fasp-modern-surfaces .context-container-trigger {
+  display: flex;
+  width: 100%;
+  height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.105);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 0 13px 0 16px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 14px;
+  text-align: left;
+  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+html.fasp-modern-surfaces .context-container-trigger:hover,
+html.fasp-modern-surfaces .context-container-trigger:focus-visible {
+  border-color: color-mix(in srgb, var(--fasp-accent) 55%, rgba(255, 255, 255, 0.14));
+  background: rgba(255, 255, 255, 0.065);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--fasp-accent) 14%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+html.fasp-modern-surfaces .context-container-trigger:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+html.fasp-modern-surfaces .context-container-trigger-label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+html.fasp-modern-surfaces .context-container-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 999px;
+  box-shadow: 0 0 12px color-mix(in srgb, currentColor 22%, transparent);
+}
+
+html.fasp-modern-surfaces .context-container-chevron {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 15px;
+  line-height: 1;
+  transition: transform 160ms ease;
+}
+
+html.fasp-modern-surfaces .context-container-chevron-open {
+  transform: rotate(180deg);
+}
+
+html.fasp-modern-surfaces .context-container-menu {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  left: 0;
+  top: calc(100% + 6px);
+  max-height: 178px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.115);
+  border-radius: 12px;
+  background: rgba(18, 15, 25, 0.98);
+  box-shadow:
+    0 18px 34px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+
+html.fasp-modern-surfaces .context-container-option {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  padding: 0 10px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  text-align: left;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+html.fasp-modern-surfaces .context-container-option:hover,
+html.fasp-modern-surfaces .context-container-option-active {
+  background: color-mix(in srgb, var(--fasp-accent) 20%, transparent);
+  color: rgba(255, 255, 255, 0.95);
 }
 
 html.fasp-modern-surfaces .context-field:focus-within {

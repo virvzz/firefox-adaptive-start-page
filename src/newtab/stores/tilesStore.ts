@@ -73,6 +73,8 @@ interface TilesState {
     destinationParentId?: SurfaceParentId
   ) => Promise<Tile | null>;
   detachBookmarkReference: (id: string) => Promise<void>;
+  applyAccentColorToAllTiles: (color: string) => Promise<{ updated: number }>;
+  clearAccentColorFromAllTiles: () => Promise<{ updated: number }>;
   optimizeMediaAssets: () => Promise<{ optimized: number }>;
   restoreMediaAssets: () => Promise<{ restored: number }>;
   getSurfaceItems: (parentId: SurfaceParentId) => Tile[];
@@ -485,6 +487,10 @@ function legacyTileToItem(tile: Record<string, unknown>): GridItem {
     customImage: typeof tile.customImage === 'string' ? tile.customImage : undefined,
     customImageAssetId: typeof tile.customImageAssetId === 'string' ? tile.customImageAssetId : undefined,
     dominantColor: typeof tile.dominantColor === 'string' ? tile.dominantColor : undefined,
+    tileAccentColor: typeof tile.tileAccentColor === 'string' ? tile.tileAccentColor : undefined,
+    containerCookieStoreId: typeof tile.containerCookieStoreId === 'string' ? tile.containerCookieStoreId : undefined,
+    containerName: typeof tile.containerName === 'string' ? tile.containerName : undefined,
+    containerColor: typeof tile.containerColor === 'string' ? tile.containerColor : undefined,
     themeColors: isRecord(tile.themeColors) ? tile.themeColors as GridItem['themeColors'] : undefined,
     source: readGridItemSource(tile.source),
     bookmarkId: typeof tile.bookmarkId === 'string' ? tile.bookmarkId : undefined,
@@ -1500,6 +1506,10 @@ export const useTileStore = create<TilesState>((set, get) => {
         borderRadius: tile.borderRadius,
         opacity: tile.opacity,
         dominantColor: tile.dominantColor,
+        tileAccentColor: tile.tileAccentColor,
+        containerCookieStoreId: tile.containerCookieStoreId,
+        containerName: tile.containerName,
+        containerColor: tile.containerColor,
       };
       if (!state.containers[containerId]) {
         state.containers[containerId] = {
@@ -2055,6 +2065,40 @@ export const useTileStore = create<TilesState>((set, get) => {
         localCopyId,
         parentContainerId,
       });
+    },
+
+    applyAccentColorToAllTiles: async (color: string) => {
+      const normalizedColor = color.trim();
+      if (!/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(normalizedColor)) return { updated: 0 };
+
+      const state = cloneAppState(get().appState);
+      let updated = 0;
+      const now = Date.now();
+      for (const item of Object.values(state.items)) {
+        item.tileAccentColor = normalizedColor;
+        item.updatedAt = now;
+        updated += 1;
+      }
+
+      await commitAppState(state);
+      logTileDebug('store:accent-color:applied', { color: normalizedColor, updated });
+      return { updated };
+    },
+
+    clearAccentColorFromAllTiles: async () => {
+      const state = cloneAppState(get().appState);
+      let updated = 0;
+      const now = Date.now();
+      for (const item of Object.values(state.items)) {
+        if (!item.tileAccentColor) continue;
+        item.tileAccentColor = undefined;
+        item.updatedAt = now;
+        updated += 1;
+      }
+
+      await commitAppState(state);
+      logTileDebug('store:accent-color:cleared', { updated });
+      return { updated };
     },
 
     optimizeMediaAssets: async () => {

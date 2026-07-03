@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { Tile } from '../../../types';
 import {
@@ -9,6 +9,7 @@ import {
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { useMediaAssetUrl } from '../../hooks/useMediaAssetUrl';
+import { getContainerColor, openUrlFromStartPage } from '../../containers/firefoxContainers';
 
 interface TileCardProps {
   tile: Tile;
@@ -51,6 +52,8 @@ export const TileCard = memo(function TileCard({
   const [titleTooltip, setTitleTooltip] = useState<TitleTooltipPosition | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
   const titleTooltipTimerRef = useRef<number | null>(null);
+  const { settings } = useSettingsStore();
+  const { runtimeTheme } = useThemeStore();
 
   useEffect(() => {
     setPreviewIndex(0);
@@ -124,12 +127,10 @@ export const TileCard = memo(function TileCard({
       e.preventDefault();
       onOpenFolder(tile);
     } else if (tile.url) {
-      window.open(tile.url, '_blank', 'noopener,noreferrer');
+      void openUrlFromStartPage(tile.url, settings.tileOpenTarget, tile.containerCookieStoreId);
     }
-  }, [hideTitleTooltip, tile, isDragging, onOpenFolder]);
+  }, [hideTitleTooltip, tile, isDragging, onOpenFolder, settings.tileOpenTarget]);
 
-  const { settings } = useSettingsStore();
-  const { runtimeTheme } = useThemeStore();
   const borderRadius = tile.borderRadius !== undefined
     ? `${tile.borderRadius}px`
     : `var(--fasp-tile-radius, ${settings.borderRadiusDefault}px)`;
@@ -153,6 +154,8 @@ export const TileCard = memo(function TileCard({
   }, [customImageAssetUrl, tile.customImage, tile.dominantColor, tile.thumbnail, tile.url]);
 
   const tileVisualMode = settings.tileVisualMode || 'mixed';
+  const tileAccentColor = tile.tileAccentColor;
+  const containerBadgeColor = getContainerColor(tile.containerColor);
   const shouldUsePreview = !preferFaviconOnly && tileVisualMode !== 'favicon';
   const previewSrc = shouldUsePreview ? previewCandidates[previewIndex] : undefined;
   const faviconSrc = tile.favicon || (tile.url ? getFaviconUrl(tile.url) : '');
@@ -193,6 +196,7 @@ export const TileCard = memo(function TileCard({
         tile-label-${tileLabelMode}
         tile-visual-${tileVisualMode}
         ${hasPreview ? 'tile-card-with-preview' : ''}
+        ${tileAccentColor ? 'tile-card-accented' : ''}
         ${isDragging ? 'dragging' : ''}
         ${isFolderDropTarget ? 'folder-drop-target' : ''}
         ${isFolderCreateTarget ? 'folder-create-target' : ''}`}
@@ -200,8 +204,9 @@ export const TileCard = memo(function TileCard({
         opacity: isDragging ? 0.5 : opacity,
         borderRadius,
         aspectRatio: '1',
+        '--tile-accent-color': tileAccentColor || 'transparent',
         ...bgStyle,
-      }}
+      } as CSSProperties & { '--tile-accent-color': string }}
       onClick={handleClick}
       onPointerEnter={scheduleTitleTooltip}
       onPointerLeave={hideTitleTooltip}
@@ -211,7 +216,7 @@ export const TileCard = memo(function TileCard({
         hideTitleTooltip();
         if (e.button === 1 && tile.url) {
           e.preventDefault();
-          window.open(tile.url, '_blank', 'noopener,noreferrer');
+          void openUrlFromStartPage(tile.url, 'new-tab', tile.containerCookieStoreId);
         }
       }}
     >
@@ -228,6 +233,10 @@ export const TileCard = memo(function TileCard({
           />
           <div className="tile-preview-shade absolute inset-0 rounded-[inherit]" />
         </>
+      )}
+
+      {tileAccentColor && (
+        <div className="tile-accent-wash absolute inset-0 rounded-[inherit]" aria-hidden="true" />
       )}
 
       {tile.type === 'folder' && !hasPreview && folderPreview.length > 0 && (
@@ -311,6 +320,15 @@ export const TileCard = memo(function TileCard({
             <path d="M12.76 2.35a1 1 0 00-1.52 1.3l.55.64-4.5 4.5-1.13-.3a1.4 1.4 0 00-1.35.37L3.7 9.97a1 1 0 00.24 1.6l3.14 1.57-3.37 3.37a1 1 0 101.42 1.42l3.37-3.37 1.57 3.14a1 1 0 001.6.24l1.11-1.11c.35-.35.49-.86.37-1.35l-.3-1.13 4.5-4.5.64.55a1 1 0 001.3-1.52l-6.53-6.53z" />
           </svg>
         </span>
+      )}
+
+      {tile.type === 'tile' && tile.containerCookieStoreId && (
+        <span
+          className={`tile-container-badge absolute ${tile.pinnedAt ? 'right-7' : 'right-2'} top-2 z-20`}
+          title={tile.containerName ? `Контейнер: ${tile.containerName}` : 'Открывается в контейнере Firefox'}
+          aria-label={tile.containerName ? `Контейнер: ${tile.containerName}` : 'Открывается в контейнере Firefox'}
+          style={{ background: containerBadgeColor, color: containerBadgeColor }}
+        />
       )}
 
       {isFolderCreateTarget && (

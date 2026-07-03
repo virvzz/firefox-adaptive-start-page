@@ -11,6 +11,7 @@ export type TileVisualMode = 'favicon' | 'thumbnail' | 'mixed';
 export type TileLabelMode = 'full' | 'compact';
 export type FolderViewMode = 'grid' | 'list';
 export type ContextMenuFocusMode = 'folder-only' | 'always' | 'off';
+export type TileOpenTarget = 'current-tab' | 'new-tab' | 'new-window';
 
 export interface GridItemBase {
   id: GridItemId;
@@ -23,6 +24,10 @@ export interface GridItemBase {
   customImage?: string;
   customImageAssetId?: string;
   dominantColor?: string;
+  tileAccentColor?: string;
+  containerCookieStoreId?: string;
+  containerName?: string;
+  containerColor?: string;
   themeColors?: {
     primary: string;
     secondary: string;
@@ -162,6 +167,7 @@ export interface AppSettings {
   tileLabelMode: TileLabelMode;
   folderViewMode: FolderViewMode;
   contextMenuFocusMode: ContextMenuFocusMode;
+  tileOpenTarget: TileOpenTarget;
 }
 
 export type ThemeShadowPreset = 'none' | 'soft' | 'deep' | 'floating';

@@ -5,6 +5,11 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { createThemeColorSwatches, normalizeThemeAccentColor } from '../../ui/themeColors';
 import { getScreenshotThumbnailUrl } from '../../../engines/tileAppearance';
+import {
+  getContainerColor,
+  listFirefoxContainers,
+  type FirefoxContainer,
+} from '../../containers/firefoxContainers';
 
 interface AddTileModalProps {
   onClose: () => void;
@@ -33,6 +38,10 @@ export function AddTileModal({ onClose, parentId = null }: AddTileModalProps) {
   const [selectedBookmarkFolderId, setSelectedBookmarkFolderId] = useState<string | null>(null);
   const [bookmarkLoading, setBookmarkLoading] = useState(false);
   const [bookmarkError, setBookmarkError] = useState<string | null>(null);
+  const [containers, setContainers] = useState<FirefoxContainer[]>([]);
+  const [containersLoading, setContainersLoading] = useState(false);
+  const [selectedContainerId, setSelectedContainerId] = useState('');
+  const [containerMenuOpen, setContainerMenuOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const tileColorRef = useRef<HTMLInputElement>(null);
   const folderColorRef = useRef<HTMLInputElement>(null);
@@ -89,6 +98,24 @@ export function AddTileModal({ onClose, parentId = null }: AddTileModalProps) {
   }, [url]);
 
   useEffect(() => {
+    let cancelled = false;
+    setContainersLoading(true);
+    listFirefoxContainers()
+      .then((items) => {
+        if (!cancelled) setContainers(items);
+      })
+      .catch(() => {
+        if (!cancelled) setContainers([]);
+      })
+      .finally(() => {
+        if (!cancelled) setContainersLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (entryMode !== 'bookmark-folder') return;
     let cancelled = false;
     setBookmarkLoading(true);
@@ -139,6 +166,7 @@ export function AddTileModal({ onClose, parentId = null }: AddTileModalProps) {
     try {
       const hostname = new URL(u).hostname.replace('www.', '');
       const t = title.trim() || hostname;
+      const selectedContainer = containers.find((container) => container.cookieStoreId === selectedContainerId);
 
       addTile({
         id: crypto.randomUUID(),
@@ -148,6 +176,9 @@ export function AddTileModal({ onClose, parentId = null }: AddTileModalProps) {
         thumbnail: mode === 'auto' ? getScreenshotThumbnailUrl(u) : undefined,
         customImage: (mode === 'custom' && customImage) ? customImage : undefined,
         dominantColor: (mode === 'custom' && customImage) ? undefined : tileColor,
+        containerCookieStoreId: selectedContainerId || undefined,
+        containerName: selectedContainerId ? selectedContainer?.name : undefined,
+        containerColor: selectedContainerId ? selectedContainer?.color : undefined,
         parentId: parentId || undefined,
         order: tiles.filter(ti => (parentId ? ti.parentId === parentId : !ti.parentId)).length,
         createdAt: Date.now(),
@@ -156,7 +187,7 @@ export function AddTileModal({ onClose, parentId = null }: AddTileModalProps) {
 
       onClose();
     } catch { /* invalid url */ }
-  }, [url, title, mode, customImage, tileColor, tiles, parentId, addTile, onClose]);
+  }, [url, title, containers, mode, customImage, selectedContainerId, tileColor, tiles, parentId, addTile, onClose]);
 
   const handleCreateFolder = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,6 +215,8 @@ export function AddTileModal({ onClose, parentId = null }: AddTileModalProps) {
     if (!selectedBookmarkFolderId) return;
     await handleAddBookmarkFolder(selectedBookmarkFolderId);
   }, [handleAddBookmarkFolder, selectedBookmarkFolderId]);
+
+  const selectedContainer = containers.find((container) => container.cookieStoreId === selectedContainerId);
 
   const modal = (
     <div
@@ -375,6 +408,146 @@ export function AddTileModal({ onClose, parentId = null }: AddTileModalProps) {
               e.target.style.boxShadow = 'none';
             }}
           />
+
+          <label style={{
+            display: 'block',
+            marginTop: '22px',
+            marginBottom: '10px',
+            color: 'rgba(255,255,255,0.84)',
+            fontSize: '14px',
+            fontWeight: 600,
+          }}>
+            Всегда запускать в контейнере
+          </label>
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              data-testid="add-tile-container-trigger"
+              disabled={containersLoading}
+              onClick={() => setContainerMenuOpen((open) => !open)}
+              style={{
+                width: '100%',
+                height: '58px',
+                borderRadius: '14px',
+                padding: '0 18px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                color: containersLoading ? 'rgba(255,255,255,0.42)' : 'white',
+                fontSize: '16px',
+                outline: 'none',
+                transition: '180ms',
+                boxSizing: 'border-box',
+                cursor: containersLoading ? 'wait' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                textAlign: 'left',
+              }}
+            >
+              <span style={{ display: 'flex', minWidth: 0, alignItems: 'center', gap: '14px' }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: '11px',
+                    height: '11px',
+                    borderRadius: '999px',
+                    flexShrink: 0,
+                    background: selectedContainer ? getContainerColor(selectedContainer.color) : 'rgba(255,255,255,0.28)',
+                    boxShadow: selectedContainer ? `0 0 16px ${getContainerColor(selectedContainer.color)}` : 'none',
+                  }}
+                />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {containersLoading ? 'Загрузка контейнеров...' : selectedContainer?.name || 'Без контейнера'}
+                </span>
+              </span>
+              <span
+                aria-hidden="true"
+                style={{
+                  color: 'rgba(255,255,255,0.45)',
+                  fontSize: '15px',
+                  transform: containerMenuOpen ? 'rotate(180deg)' : 'none',
+                  transition: '160ms',
+                }}
+              >
+                ˅
+              </span>
+            </button>
+            {containerMenuOpen && !containersLoading && (
+              <div
+                data-testid="add-tile-container-menu"
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: 'calc(100% + 8px)',
+                  zIndex: 20,
+                  maxHeight: '190px',
+                  overflowY: 'auto',
+                  padding: '6px',
+                  borderRadius: '14px',
+                  background: 'rgba(18, 20, 35, 0.98)',
+                  border: '1px solid rgba(255,255,255,0.11)',
+                  boxShadow: '0 18px 36px rgba(0,0,0,0.38), 0 0 0 1px rgba(255,255,255,0.04) inset',
+                  backdropFilter: 'blur(22px)',
+                  WebkitBackdropFilter: 'blur(22px)',
+                }}
+              >
+                {[
+                  { cookieStoreId: '', name: 'Без контейнера', color: undefined },
+                  ...containers,
+                ].map((container) => {
+                  const selected = selectedContainerId === container.cookieStoreId;
+                  return (
+                    <button
+                      key={container.cookieStoreId || 'default-container'}
+                      type="button"
+                      data-testid="add-tile-container-option"
+                      data-container-id={container.cookieStoreId}
+                      onClick={() => {
+                        setSelectedContainerId(container.cookieStoreId);
+                        setContainerMenuOpen(false);
+                      }}
+                      style={{
+                        width: '100%',
+                        minHeight: '40px',
+                        border: 0,
+                        borderRadius: '10px',
+                        background: selected ? 'color-mix(in srgb, var(--fasp-accent) 20%, transparent)' : 'transparent',
+                        color: selected ? 'white' : 'rgba(255,255,255,0.72)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        padding: '0 12px',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: '10px',
+                          height: '10px',
+                          borderRadius: '999px',
+                          flexShrink: 0,
+                          background: container.cookieStoreId ? getContainerColor(container.color) : 'rgba(255,255,255,0.28)',
+                        }}
+                      />
+                      <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {container.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <input
+              type="hidden"
+              data-testid="add-tile-container-select"
+              value={selectedContainerId}
+              readOnly
+            />
+          </div>
 
           {/* Image mode */}
           <label style={{

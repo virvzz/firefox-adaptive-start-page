@@ -3,8 +3,8 @@
     "@adaptive-start-page": {
       "updates": [
         {
-          "version": "0.1.2",
-          "update_link": "https://github.com/virvzz/firefox-adaptive-start-page/releases/download/v0.1.2/adaptive-start-page-0.1.2.xpi",
+          "version": "0.1.3",
+          "update_link": "https://github.com/virvzz/firefox-adaptive-start-page/releases/download/v0.1.3/adaptive-start-page-0.1.3.xpi",
           "applications": {
             "gecko": {
               "strict_min_version": "142.0"

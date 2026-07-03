@@ -80,8 +80,18 @@ declare namespace browser {
     function getRecentlyClosed(options?: { maxResults?: number }): Promise<Array<{ tab?: SessionTab }>>;
     function restore(sessionId?: string): Promise<unknown>;
   }
+  namespace contextualIdentities {
+    interface ContextualIdentity {
+      cookieStoreId: string;
+      name: string;
+      color?: string;
+      icon?: string;
+    }
+    function query(details?: Record<string, never>): Promise<ContextualIdentity[]>;
+  }
   namespace tabs {
-    function create(createProperties: { url?: string; active?: boolean }): Promise<Tab>;
+    function create(createProperties: { url?: string; active?: boolean; cookieStoreId?: string }): Promise<Tab>;
+    function update(updateProperties: { url?: string; active?: boolean }): Promise<Tab>;
     function update(tabId: number, updateProperties: { url?: string; active?: boolean }): Promise<Tab>;
     interface Tab {
       id?: number;
@@ -89,5 +99,8 @@ declare namespace browser {
       title?: string;
       active: boolean;
     }
+  }
+  namespace windows {
+    function create(createData: { url?: string | string[]; focused?: boolean; cookieStoreId?: string }): Promise<unknown>;
   }
 }

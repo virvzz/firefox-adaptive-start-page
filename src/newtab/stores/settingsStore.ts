@@ -27,6 +27,7 @@ interface SettingsState {
   setTileLabelMode: (mode: AppSettings['tileLabelMode']) => Promise<void>;
   setFolderViewMode: (mode: AppSettings['folderViewMode']) => Promise<void>;
   setContextMenuFocusMode: (mode: AppSettings['contextMenuFocusMode']) => Promise<void>;
+  setTileOpenTarget: (target: AppSettings['tileOpenTarget']) => Promise<void>;
   resetSettings: () => Promise<void>;
 }
 
@@ -53,6 +54,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   tileLabelMode: 'compact',
   folderViewMode: 'grid',
   contextMenuFocusMode: 'folder-only',
+  tileOpenTarget: 'current-tab',
 };
 
 async function saveSettings(settings: AppSettings): Promise<void> {
@@ -109,6 +111,9 @@ export function normalizeSettings(raw: Partial<AppSettings> | Record<string, unk
   }
   if (!['folder-only', 'always', 'off'].includes(String(normalized.contextMenuFocusMode))) {
     normalized.contextMenuFocusMode = DEFAULT_SETTINGS.contextMenuFocusMode;
+  }
+  if (!['current-tab', 'new-tab', 'new-window'].includes(String(normalized.tileOpenTarget))) {
+    normalized.tileOpenTarget = DEFAULT_SETTINGS.tileOpenTarget;
   }
 
   if ('infoCardTransparency' in source) {
@@ -291,6 +296,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       ? mode
       : DEFAULT_SETTINGS.contextMenuFocusMode;
     const newSettings = { ...get().settings, contextMenuFocusMode: normalizedMode };
+    set({ settings: newSettings });
+    await saveSettings(newSettings);
+  },
+
+  setTileOpenTarget: async (target) => {
+    const normalizedTarget = target === 'current-tab' || target === 'new-tab' || target === 'new-window'
+      ? target
+      : DEFAULT_SETTINGS.tileOpenTarget;
+    const newSettings = { ...get().settings, tileOpenTarget: normalizedTarget };
     set({ settings: newSettings });
     await saveSettings(newSettings);
   },

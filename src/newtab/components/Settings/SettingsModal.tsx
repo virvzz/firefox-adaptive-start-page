@@ -449,6 +449,8 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [mediaOptimizationStatus, setMediaOptimizationStatus] = useState<string | null>(null);
   const [profileTransferStatus, setProfileTransferStatus] = useState<string | null>(null);
   const [profileTransferBusy, setProfileTransferBusy] = useState(false);
+  const [tileBulkColor, setTileBulkColor] = useState('#8b5cf6');
+  const [tileBulkColorStatus, setTileBulkColorStatus] = useState<string | null>(null);
 
   const { config: layout, setColumns, setFolderColumns, setSpacing } = useLayoutStore();
   const {
@@ -481,6 +483,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setTileLabelMode,
     setFolderViewMode,
     setContextMenuFocusMode,
+    setTileOpenTarget,
     resetSettings,
   } = useSettingsStore();
   const {
@@ -499,7 +502,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     saveCustomTheme,
     deleteCustomTheme,
   } = useThemeStore();
-  const { optimizeMediaAssets, restoreMediaAssets } = useTileStore();
+  const {
+    applyAccentColorToAllTiles,
+    clearAccentColorFromAllTiles,
+    optimizeMediaAssets,
+    restoreMediaAssets,
+  } = useTileStore();
   const cancelPreviewRef = useRef(cancelPreview);
 
   const themeForEditor = previewTheme || runtimeTheme;
@@ -523,6 +531,12 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     themeForEditor.colors.text,
     themeForEditor.colors.danger,
   ]);
+
+  useEffect(() => {
+    const normalizedAccent = normalizeHexColor(themeForEditor.colors.accent);
+    if (!normalizedAccent) return;
+    setTileBulkColor((current) => (current === '#8b5cf6' ? normalizedAccent : current));
+  }, [themeForEditor.colors.accent]);
 
   const backgroundPreviewBaseStyle: CSSProperties = bg.staticImage
     ? { backgroundImage: `url("${bg.staticImage}")` }
@@ -569,6 +583,31 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         : 'Откатывать нечего: оптимизированных изображений в плитках не найдено.'
     );
   }, [restoreMediaAssets, setOptimizeMediaAssets]);
+
+  const handleApplyTileBulkColor = useCallback(async () => {
+    const normalizedColor = normalizeHexColor(tileBulkColor);
+    if (!normalizedColor) {
+      setTileBulkColorStatus('Введите цвет в формате HEX, например #8b5cf6.');
+      return;
+    }
+
+    setTileBulkColor(normalizedColor);
+    const result = await applyAccentColorToAllTiles(normalizedColor);
+    setTileBulkColorStatus(
+      result.updated > 0
+        ? `Цветовой акцент применён: ${result.updated}.`
+        : 'Плиток для изменения пока нет.'
+    );
+  }, [applyAccentColorToAllTiles, tileBulkColor]);
+
+  const handleClearTileBulkColor = useCallback(async () => {
+    const result = await clearAccentColorFromAllTiles();
+    setTileBulkColorStatus(
+      result.updated > 0
+        ? `Цветовой акцент снят: ${result.updated}.`
+        : 'Общий цветовой акцент уже не задан.'
+    );
+  }, [clearAccentColorFromAllTiles]);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -1365,6 +1404,74 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   description="Скрывает остальные плитки и содержимое выбранной плитки, пока открыто контекстное меню."
                 />
 
+                <SettingsDropdown
+                  label="Открывать страницы"
+                  value={settings.tileOpenTarget}
+                  options={[
+                    { value: 'current-tab', label: 'В этой вкладке' },
+                    { value: 'new-tab', label: 'В новой вкладке' },
+                    { value: 'new-window', label: 'В новом окне' },
+                  ]}
+                  onChange={(value) => setTileOpenTarget(value as typeof settings.tileOpenTarget)}
+                  description="Выберите, где открывать страницы с главного экрана. Плитки с контейнером откроются в выбранном контейнере."
+                />
+
+                <section className="settings-theme-card settings-layout-card">
+                  <div className="space-y-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-white/85">Цвет всех плиток</h3>
+                      <p className="mt-1 text-xs leading-relaxed text-white/38">
+                        Применяет общий цветовой акцент ко всем плиткам и папкам, не удаляя изображения.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="flex w-full min-w-[220px] items-center gap-3 rounded-xl border border-white/10 bg-white/[0.045] px-3 py-2">
+                        <input
+                          type="color"
+                          value={tileBulkColor}
+                          onChange={(event) => setTileBulkColor(event.currentTarget.value)}
+                          className="h-8 w-10 shrink-0 cursor-pointer rounded-lg border-0 bg-transparent p-0"
+                          aria-label="Цвет всех плиток"
+                        />
+                        <input
+                          type="text"
+                          data-testid="tile-bulk-color-input"
+                          value={tileBulkColor}
+                          onChange={(event) => setTileBulkColor(event.currentTarget.value)}
+                          className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-white outline-none"
+                          aria-label="HEX цвет всех плиток"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        data-testid="tile-bulk-color-apply"
+                        onClick={() => void handleApplyTileBulkColor()}
+                        className="rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200"
+                        style={{
+                          background: 'linear-gradient(135deg, var(--fasp-accent), color-mix(in srgb, var(--fasp-accent-2) 38%, var(--fasp-accent)))',
+                          color: 'var(--fasp-on-accent)',
+                          boxShadow: '0 10px 24px color-mix(in srgb, var(--fasp-accent) 22%, transparent)',
+                        }}
+                      >
+                        Применить ко всем
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="tile-bulk-color-clear"
+                        onClick={() => void handleClearTileBulkColor()}
+                        className="rounded-xl border border-white/10 bg-white/[0.055] px-4 py-2 text-sm font-semibold text-white/68 transition-colors hover:bg-white/[0.09] hover:text-white"
+                      >
+                        Сбросить
+                      </button>
+                    </div>
+                    {tileBulkColorStatus && (
+                      <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/56">
+                        {tileBulkColorStatus}
+                      </p>
+                    )}
+                  </div>
+                </section>
+
                 <section className="settings-theme-card settings-layout-card">
                   <div className="space-y-3">
                     <ToggleSwitch
@@ -1880,7 +1987,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">Adaptive Start Page</h3>
-                  <p className="text-sm text-white/40">Версия 0.1.2</p>
+                  <p className="text-sm text-white/40">Версия 0.1.3</p>
                 </div>
               </div>
               <p className="text-sm text-white/50 leading-relaxed">
