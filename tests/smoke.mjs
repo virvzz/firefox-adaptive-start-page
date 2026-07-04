@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -102,6 +102,13 @@ function startPreview(port) {
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: false,
   });
+}
+
+function smokeManifestPermissions() {
+  const manifest = JSON.parse(readFileSync(join(rootDir, 'dist', 'manifest.json'), 'utf8'));
+  const permissions = new Set(manifest.permissions || []);
+  assert(permissions.has('contextualIdentities'), 'Manifest should request contextualIdentities for Firefox containers');
+  assert(permissions.has('cookies'), 'Manifest should request cookies so cookieStoreId can open container tabs');
 }
 
 function findInstalledChromium() {
@@ -1026,6 +1033,7 @@ async function main() {
   assert(existsSync(viteBin), `Vite binary not found at ${viteBin}`);
   const { chromium } = loadPlaywright();
   await run(process.execPath, [viteBin, 'build'], 'vite build');
+  smokeManifestPermissions();
 
   const port = await getFreePort();
   const baseUrl = `http://127.0.0.1:${port}`;
@@ -1065,7 +1073,7 @@ async function main() {
     await smokeProfileTransfer(page, baseUrl);
 
     assert(failures.length === 0, `Browser errors during smoke run:\n${failures.join('\n')}`);
-    console.log('Smoke tests passed: DnD, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Tile Containers/Open Target, Bulk Tile Accent, Startup Background Hydration, Profile Transfer');
+    console.log('Smoke tests passed: Manifest Permissions, DnD, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Tile Containers/Open Target, Bulk Tile Accent, Startup Background Hydration, Profile Transfer');
   } finally {
     if (browser) await browser.close();
     await stopPreview(preview);

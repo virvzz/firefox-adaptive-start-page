@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Adaptive Start Page",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Highly customizable new tab page with tiles, generative backgrounds, and bookmarks integration.",
   "chrome_url_overrides": {
     "newtab": "newtab.html"
@@ -12,6 +12,7 @@
   "permissions": [
     "bookmarks",
     "contextualIdentities",
+    "cookies",
     "sessions",
     "storage",
     "tabs",
