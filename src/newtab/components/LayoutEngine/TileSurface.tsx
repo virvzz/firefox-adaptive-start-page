@@ -1,4 +1,4 @@
-import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   closestCenter,
   DndContext,
@@ -15,12 +15,28 @@ import {
 import {
   rectSortingStrategy,
   SortableContext,
-  useSortable,
-  type SortingStrategy,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import type { Tile } from '../../../types';
 import { TileCard } from '../Tile/TileCard';
+import { SortableTile } from './SortableTile';
+import { TileDebugOverlay } from './TileDebugOverlay';
+import {
+  FOLDER_TRANSITION_MS,
+  SharedTileDragContext,
+  dispatchDndActive,
+  getEventPoint,
+  getFolderAnimationStyle,
+  getFolderPanelElement,
+  getPointDistance,
+  hasCrossedReorderMidpoint,
+  isPointInsideRect,
+  lockedSortingStrategy,
+  pointFromDragDelta,
+  roundMetric,
+  surfaceKey,
+  type DropIntent,
+  type SharedTileDragState,
+} from './surfaceHelpers';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useTileStore } from '../../stores/tilesStore';
@@ -31,14 +47,12 @@ import {
   isPointOutsideRect,
   resolveSurfaceInteraction,
   type Point,
-  type RectLike,
   type SurfaceDropIntent,
   type SurfaceDropIntentType,
 } from '../../engines/surfaceInteractionEngine';
 import {
   type DebugRect,
   getElementDebugRect,
-  getDragTelemetrySnapshot,
   getTileDebugOverlayChangeEventName,
   getTileDebugGeometrySnapshot,
   getTileDebugRect,
@@ -67,296 +81,9 @@ interface TileSurfaceProps {
   openOriginRect?: DebugRect | null;
 }
 
-type DropIntent = SurfaceDropIntent | null;
-
-const lockedSortingStrategy: SortingStrategy = () => null;
-const FOLDER_TRANSITION_MS = 320;
-const DND_ACTIVE_EVENT = 'fasp-dnd-active-change';
-
-interface SharedTileDragState {
-  activeId: string | null;
-  activeTile: Tile | null;
-  dropIntent: DropIntent;
-  pendingCreateTargetId: string | null;
-  exitingFolderId: string | null;
-}
-
-const SharedTileDragContext = createContext<SharedTileDragState | null>(null);
-
-function getEventPoint(event: Event): Point | null {
-  if ('clientX' in event && 'clientY' in event) {
-    return {
-      x: (event as MouseEvent | PointerEvent).clientX,
-      y: (event as MouseEvent | PointerEvent).clientY,
-    };
-  }
-
-  if ('touches' in event) {
-    const touchEvent = event as TouchEvent;
-    const touch = touchEvent.touches[0] || touchEvent.changedTouches[0];
-    if (touch) return { x: touch.clientX, y: touch.clientY };
-  }
-
-  return null;
-}
-
-function pointFromDragDelta(startPoint: Point | null, delta: { x: number; y: number }): Point | null {
-  if (!startPoint) return null;
-  return {
-    x: startPoint.x + delta.x,
-    y: startPoint.y + delta.y,
-  };
-}
-
-function roundMetric(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
-function getPointDistance(a: Point | null, b: Point | null): number | null {
-  if (!a || !b) return null;
-  return roundMetric(Math.hypot(a.x - b.x, a.y - b.y));
-}
-
-function getFolderAnimationStyle(originRect: DebugRect | null | undefined): React.CSSProperties {
-  const fallbackX = typeof window !== 'undefined' ? window.innerWidth / 2 : 0;
-  const fallbackY = typeof window !== 'undefined' ? window.innerHeight / 2 : 0;
-  const originX = originRect?.center.x ?? fallbackX;
-  const originY = originRect?.center.y ?? fallbackY;
-
-  return {
-    '--folder-origin-x': `${originX}px`,
-    '--folder-origin-y': `${originY}px`,
-  } as React.CSSProperties;
-}
-
-function surfaceKey(parentId: string | null | undefined): string {
-  return parentId || 'root';
-}
-
-function dispatchDndActive(active: boolean): void {
-  if (typeof window === 'undefined') return;
-  document.documentElement.classList.toggle('fasp-dnd-active', active);
-  window.dispatchEvent(new CustomEvent(DND_ACTIVE_EVENT, { detail: { active } }));
-}
-
-function getFolderPanelElement(parentId: string): HTMLElement | null {
-  const panels = document.querySelectorAll<HTMLElement>('[data-folder-panel]');
-  return Array.from(panels).find((panel) => panel.dataset.parentId === parentId) || null;
-}
-
-function isPointInsideRect(point: Point | null, rect: RectLike | null | undefined): boolean {
-  if (!point || !rect) return false;
-  return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
-}
-
-function hasCrossedReorderMidpoint(
-  point: Point | null,
-  activeRect: RectLike | null | undefined,
-  targetRect: RectLike | null | undefined
-): boolean {
-  if (!point || !activeRect || !targetRect) return false;
-
-  const activeCenterX = activeRect.left + activeRect.width / 2;
-  const activeCenterY = activeRect.top + activeRect.height / 2;
-  const targetCenterX = targetRect.left + targetRect.width / 2;
-  const targetCenterY = targetRect.top + targetRect.height / 2;
-  const deltaX = targetCenterX - activeCenterX;
-  const deltaY = targetCenterY - activeCenterY;
-
-  if (Math.abs(deltaX) >= Math.abs(deltaY)) {
-    if (deltaX < 0) return point.x < targetCenterX;
-    if (deltaX > 0) return point.x > targetCenterX;
-    return false;
-  }
-
-  if (deltaY < 0) return point.y < targetCenterY;
-  if (deltaY > 0) return point.y > targetCenterY;
-  return false;
-}
-
-function debugContextValue(context: unknown, key: string): unknown {
-  if (!context || typeof context !== 'object') return null;
-  const record = context as Record<string, unknown>;
-  if (key in record) return record[key];
-  const nested = record.context;
-  if (nested && typeof nested === 'object' && key in nested) {
-    return (nested as Record<string, unknown>)[key];
-  }
-  return null;
-}
-
-function debugContextId(context: unknown, key: string): string | null {
-  const direct = debugContextValue(context, key);
-  if (typeof direct === 'string') return direct;
-
-  const objectValue = debugContextValue(context, key.replace(/Id$/, ''));
-  if (objectValue && typeof objectValue === 'object') {
-    const record = objectValue as Record<string, unknown>;
-    if (typeof record.fullId === 'string') return record.fullId;
-    if (typeof record.id === 'string') return record.id;
-  }
-
-  return null;
-}
-
-function SortableTile({
-  tile,
-  childCount,
-  folderPreviewItems,
-  isDragging,
-  isFolderDropTarget,
-  isFolderCreateTarget,
-  folderCreatePartner,
-  preferFaviconOnly,
-  suppressLayoutTransform,
-  isContextMenuDimmed,
-  isContextMenuTarget,
-  onOpenFolder,
-}: {
-  tile: Tile;
-  childCount: number;
-  folderPreviewItems: Tile[];
-  isDragging: boolean;
-  isFolderDropTarget: boolean;
-  isFolderCreateTarget: boolean;
-  folderCreatePartner: Tile | null;
-  preferFaviconOnly: boolean;
-  suppressLayoutTransform: boolean;
-  isContextMenuDimmed: boolean;
-  isContextMenuTarget: boolean;
-  onOpenFolder: (tile: Tile) => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: tile.id });
-
-  const style: React.CSSProperties = {
-    transform: suppressLayoutTransform && !isDragging ? undefined : CSS.Transform.toString(transform),
-    transition: isDragging
-      ? undefined
-      : transition || `transform ${SURFACE_INTERACTION.layoutTransformDurationMs}ms cubic-bezier(0.22, 1, 0.36, 1)`,
-    zIndex: isDragging ? 30 : undefined,
-    willChange: isDragging ? 'transform' : undefined,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`sortable-tile ${isDragging ? 'is-dragging' : ''} ${isContextMenuDimmed ? 'context-menu-dimmed' : ''} ${isContextMenuTarget ? 'context-menu-target' : ''}`}
-      {...attributes}
-      {...listeners}
-      aria-label={tile.title}
-      onKeyDown={(event) => {
-        if (event.key !== 'Enter' && event.key !== ' ') return;
-        if (event.target !== event.currentTarget) return;
-        event.preventDefault();
-        event.currentTarget.querySelector<HTMLElement>('[data-testid="tile-card"]')?.click();
-      }}
-    >
-      <TileCard
-        tile={tile}
-        childCount={childCount}
-        folderPreviewItems={folderPreviewItems}
-        isDragging={isDragging}
-        isFolderDropTarget={isFolderDropTarget}
-        isFolderCreateTarget={isFolderCreateTarget}
-        folderCreatePartner={folderCreatePartner}
-        preferFaviconOnly={preferFaviconOnly}
-        onOpenFolder={onOpenFolder}
-      />
-    </div>
-  );
-}
-
-function TileDebugOverlay({ enabled }: { enabled: boolean }) {
-  const [snapshot, setSnapshot] = useState<{ geometry: unknown; drag: unknown } | null>(null);
-
-  useEffect(() => {
-    if (!enabled) {
-      setSnapshot(null);
-      return;
-    }
-
-    let cancelled = false;
-    let frameId = 0;
-    const tick = () => {
-      if (cancelled) return;
-      setSnapshot({
-        geometry: getTileDebugGeometrySnapshot(),
-        drag: getDragTelemetrySnapshot(),
-      });
-      frameId = window.setTimeout(tick, 180);
-    };
-
-    tick();
-    return () => {
-      cancelled = true;
-      window.clearTimeout(frameId);
-    };
-  }, [enabled]);
-
-  if (!enabled || !snapshot) return null;
-
-  const geometry = snapshot.geometry as {
-    tiles?: Array<Record<string, any>>;
-    pointer?: Record<string, unknown>;
-  } | null;
-  const drag = snapshot.drag as {
-    state?: string;
-    context?: unknown;
-  } | null;
-  const tiles = geometry?.tiles || [];
-  const context = drag?.context || null;
-  const sourceId = debugContextId(context, 'sourceId') || debugContextId(context, 'activeId');
-  const targetId = debugContextId(context, 'targetId') || debugContextId(context, 'overId');
-  const mode = String(debugContextValue(context, 'mode') || drag?.state || 'IDLE');
-  const hoverDuration = debugContextValue(context, 'hoverDurationMs');
-  const requiredDuration = debugContextValue(context, 'requiredHoverMs');
-
-  return (
-    <div className="tile-debug-overlay" aria-hidden="true">
-      <div className="tile-debug-panel">
-        <div><strong>{drag?.state || 'IDLE'}</strong></div>
-        <div>mode: {mode}</div>
-        <div>source: {sourceId ? sourceId.slice(0, 8) : '-'}</div>
-        <div>target: {targetId ? targetId.slice(0, 8) : '-'}</div>
-        <div>hover: {typeof hoverDuration === 'number' ? `${Math.round(hoverDuration)}ms` : '-'} / {typeof requiredDuration === 'number' ? `${requiredDuration}ms` : '-'}</div>
-      </div>
-
-      {tiles.map((tile) => {
-        const rect = tile.hitboxRect || tile.rect;
-        if (!rect) return null;
-        const id = String(tile.id || '');
-        const zone = tile.folderCreateZoneRect;
-        const isSource = id === sourceId;
-        const isTarget = id === targetId;
-        return (
-          <div key={id} className={`tile-debug-hitbox ${isSource ? 'tile-debug-source' : ''} ${isTarget ? 'tile-debug-target' : ''}`} style={{
-            left: `${rect.left}px`,
-            top: `${rect.top}px`,
-            width: `${rect.width}px`,
-            height: `${rect.height}px`,
-          }}>
-            <div className="tile-debug-label">
-              {tile.type}:{id.slice(0, 8)} L{tile.level ?? '-'} #{tile.index ?? tile.order ?? '-'}
-              <span>p:{String(tile.parentId || 'root').slice(0, 8)}</span>
-              <span>{Math.round(rect.width)}x{Math.round(rect.height)}</span>
-            </div>
-            <div className="tile-debug-midline-x" />
-            <div className="tile-debug-midline-y" />
-            {zone && (
-              <div className="tile-debug-create-zone" style={{
-                left: `${zone.left - rect.left}px`,
-                top: `${zone.top - rect.top}px`,
-                width: `${zone.width}px`,
-                height: `${zone.height}px`,
-              }} />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+// Shared drag types, DOM helpers, and the cross-surface drag context live in
+// ./surfaceHelpers; the sortable wrapper and the debug overlay are extracted
+// into ./SortableTile and ./TileDebugOverlay.
 
 export function TileSurface({ parentId = null, title, level = 0, onClose, openOriginRect }: TileSurfaceProps) {
   const sharedDragState = useContext(SharedTileDragContext);

@@ -1,0 +1,492 @@
+/* Smooth top widgets and grid flow */
+.widgets-zone {
+  position: relative;
+  z-index: 40;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  transform: translateY(-14px);
+  transition:
+    max-height 760ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 520ms ease,
+    padding 760ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 760ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.widgets-zone-visible {
+  max-height: 240px;
+  overflow: visible;
+  opacity: 1;
+  padding-top: 58px;
+  padding-bottom: 18px;
+  transform: translateY(0);
+}
+
+.widgets-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-inline: 16px;
+  transition: transform 760ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.quick-access-bar {
+  position: fixed;
+  left: 18px;
+  top: 18px;
+  z-index: 46;
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+}
+
+.quick-access-trigger {
+  min-height: 36px;
+  border-radius: 999px;
+  padding: 0 14px;
+  color: color-mix(in srgb, var(--fasp-text) 78%, transparent);
+  font-size: 12px;
+  font-weight: 720;
+  letter-spacing: 0.01em;
+  transition:
+    background var(--fasp-duration-fast) ease,
+    border-color var(--fasp-duration-fast) ease,
+    color var(--fasp-duration-fast) ease,
+    transform var(--fasp-duration-fast) ease;
+}
+
+.quick-access-trigger:hover,
+.quick-access-trigger-active {
+  border-color: color-mix(in srgb, var(--fasp-accent) 34%, var(--fasp-border)) !important;
+  background: color-mix(in srgb, var(--fasp-accent) 15%, var(--fasp-surface)) !important;
+  color: var(--fasp-text);
+  transform: translateY(-1px);
+}
+
+.quick-access-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 10px);
+  width: min(360px, calc(100vw - 36px));
+  border-radius: 18px;
+  padding: 10px;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.34);
+}
+
+.quick-access-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--fasp-border) 62%, transparent);
+  padding: 4px 4px 10px;
+}
+
+.quick-access-panel-header strong {
+  color: var(--fasp-text);
+  font-size: 12px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.quick-access-panel-header button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--fasp-muted-text);
+  font-size: 18px;
+  line-height: 1;
+  transition:
+    background var(--fasp-duration-fast) ease,
+    color var(--fasp-duration-fast) ease;
+}
+
+.quick-access-panel-header button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--fasp-text);
+}
+
+.quick-access-list {
+  display: grid;
+  max-height: min(420px, calc(100vh - 96px));
+  gap: 4px;
+  overflow-y: auto;
+  padding-top: 8px;
+}
+
+.quick-access-item {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  border-radius: 12px;
+  padding: 10px;
+  text-align: left;
+  transition:
+    background var(--fasp-duration-fast) ease,
+    transform var(--fasp-duration-fast) ease;
+}
+
+.quick-access-item:hover {
+  background: color-mix(in srgb, var(--fasp-accent) 13%, rgba(255, 255, 255, 0.05));
+  transform: translateX(2px);
+}
+
+.quick-access-item span,
+.quick-access-item small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quick-access-item span {
+  color: color-mix(in srgb, var(--fasp-text) 88%, transparent);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.quick-access-item small,
+.quick-access-empty {
+  color: var(--fasp-muted-text);
+  font-size: 11px;
+}
+
+.quick-access-empty {
+  padding: 12px 10px;
+}
+
+.tile-grid-shell {
+  min-height: calc(100vh - 92px);
+  padding-top: 92px;
+  padding-bottom: 80px;
+  transition: padding-top 760ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tile-grid-shell-with-widgets {
+  padding-top: 10px;
+}
+
+.info-card {
+  width: min(276px, calc(100vw - 36px));
+  height: 168px;
+  border-radius: 18px;
+  padding: 14px;
+  color: var(--fasp-text);
+  overflow: hidden;
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--fasp-surface-strong) var(--fasp-info-card-opacity-percent), transparent),
+      color-mix(in srgb, rgba(15, 18, 32, 0.56) var(--fasp-info-card-opacity-percent), transparent)
+    ) !important;
+  border-color: color-mix(in srgb, var(--fasp-border) var(--fasp-info-card-border-percent), transparent) !important;
+  box-shadow: 0 18px 48px color-mix(in srgb, #000 var(--fasp-info-card-shadow-percent), transparent);
+  backdrop-filter: blur(calc(var(--fasp-glass-strong-blur) * var(--fasp-info-card-opacity))) saturate(var(--fasp-glass-saturation));
+  -webkit-backdrop-filter: blur(calc(var(--fasp-glass-strong-blur) * var(--fasp-info-card-opacity))) saturate(var(--fasp-glass-saturation));
+}
+
+html[data-fasp-glass="off"] .info-card.glass-strong {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--fasp-surface-strong) var(--fasp-info-card-opacity-percent), transparent),
+      color-mix(in srgb, var(--fasp-surface) var(--fasp-info-card-opacity-percent), transparent)
+    ) !important;
+  box-shadow: 0 18px 48px color-mix(in srgb, #000 var(--fasp-info-card-shadow-percent), transparent);
+}
+
+.performance-monitor {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 45;
+  pointer-events: none;
+}
+
+.performance-monitor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.performance-monitor-header span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fasp-muted-text);
+}
+
+.performance-monitor-header strong {
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: color-mix(in srgb, var(--fasp-accent) 18%, transparent);
+  color: color-mix(in srgb, var(--fasp-accent) 62%, white);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.performance-monitor-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 14px;
+  font-size: 12px;
+}
+
+.performance-monitor-grid span,
+.performance-monitor p {
+  color: var(--fasp-muted-text);
+}
+
+.performance-monitor-grid strong {
+  color: var(--fasp-text);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.performance-monitor p {
+  display: -webkit-box;
+  margin-top: 8px;
+  overflow: hidden;
+  font-size: 9px;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.weather-card {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 45;
+}
+
+.weather-card-link {
+  display: grid;
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  align-items: center;
+  color: inherit;
+  text-decoration: none;
+}
+
+.weather-card-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.weather-card-location {
+  overflow: hidden;
+  color: var(--fasp-muted-text);
+  font-size: 12px;
+  font-weight: 720;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.weather-card-copy strong,
+.weather-card-link > strong {
+  color: var(--fasp-text);
+  font-size: 32px;
+  font-weight: 760;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.weather-card-copy em {
+  overflow: hidden;
+  color: color-mix(in srgb, var(--fasp-text) 66%, transparent);
+  font-size: 13px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weather-card-loading {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--fasp-muted-text);
+  font-size: 13px;
+}
+
+.weather-card-icon {
+  position: relative;
+  display: block;
+  width: 64px;
+  height: 64px;
+}
+
+.weather-card-icon::before,
+.weather-card-icon::after,
+.weather-card-icon i,
+.weather-card-icon b {
+  position: absolute;
+  display: block;
+  content: "";
+}
+
+.weather-card-icon-sun i {
+  inset: 11px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 35% 30%, #fff7ad, #facc15 42%, #fb923c 100%);
+  box-shadow:
+    0 0 18px rgba(250, 204, 21, 0.58),
+    0 0 42px rgba(251, 146, 60, 0.34);
+}
+
+.weather-card-icon-sun::before {
+  inset: 4px;
+  border-radius: 999px;
+  background: conic-gradient(from 0deg, transparent 0 12deg, rgba(250, 204, 21, 0.62) 12deg 21deg, transparent 21deg 45deg);
+  filter: blur(0.2px);
+}
+
+.weather-card-icon-cloud i,
+.weather-card-icon-rain i,
+.weather-card-icon-snow i,
+.weather-card-icon-storm i,
+.weather-card-icon-fog i {
+  left: 9px;
+  right: 6px;
+  bottom: 17px;
+  height: 28px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #eef6ff, #9fb3c8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 12px 26px rgba(15, 23, 42, 0.26);
+}
+
+.weather-card-icon-cloud i::before,
+.weather-card-icon-rain i::before,
+.weather-card-icon-snow i::before,
+.weather-card-icon-storm i::before,
+.weather-card-icon-fog i::before {
+  position: absolute;
+  left: 8px;
+  top: -14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: inherit;
+  content: "";
+}
+
+.weather-card-icon-cloud i::after,
+.weather-card-icon-rain i::after,
+.weather-card-icon-snow i::after,
+.weather-card-icon-storm i::after,
+.weather-card-icon-fog i::after {
+  position: absolute;
+  right: 7px;
+  top: -10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: inherit;
+  content: "";
+}
+
+.weather-card-icon-cloud::before {
+  inset: 8px 28px 28px 6px;
+  border-radius: 999px;
+  background: radial-gradient(circle, #facc15, #fb923c 70%);
+  box-shadow: 0 0 22px rgba(250, 204, 21, 0.34);
+}
+
+.weather-card-icon-rain b,
+.weather-card-icon-snow b {
+  left: 18px;
+  right: 12px;
+  bottom: 6px;
+  height: 14px;
+  background:
+    radial-gradient(circle at 10% 80%, #67e8f9 0 2px, transparent 2.5px),
+    radial-gradient(circle at 46% 70%, #67e8f9 0 2px, transparent 2.5px),
+    radial-gradient(circle at 82% 84%, #67e8f9 0 2px, transparent 2.5px);
+}
+
+.weather-card-icon-snow b {
+  background:
+    radial-gradient(circle at 10% 80%, #f8fafc 0 2.5px, transparent 3px),
+    radial-gradient(circle at 46% 70%, #f8fafc 0 2.5px, transparent 3px),
+    radial-gradient(circle at 82% 84%, #f8fafc 0 2.5px, transparent 3px);
+}
+
+.weather-card-icon-storm b {
+  left: 30px;
+  bottom: 3px;
+  width: 15px;
+  height: 25px;
+  clip-path: polygon(45% 0, 100% 0, 62% 40%, 100% 40%, 28% 100%, 48% 54%, 16% 54%);
+  background: linear-gradient(180deg, #fde047, #fb923c);
+  filter: drop-shadow(0 0 10px rgba(250, 204, 21, 0.45));
+}
+
+.weather-card-icon-fog b {
+  left: 8px;
+  right: 6px;
+  bottom: 8px;
+  height: 20px;
+  background:
+    linear-gradient(90deg, transparent, rgba(226, 232, 240, 0.78), transparent) 0 2px / 100% 2px no-repeat,
+    linear-gradient(90deg, transparent, rgba(226, 232, 240, 0.56), transparent) 0 10px / 100% 2px no-repeat,
+    linear-gradient(90deg, transparent, rgba(226, 232, 240, 0.42), transparent) 0 18px / 100% 2px no-repeat;
+}
+
+.tile-surface[data-level="0"] {
+  min-height: calc(100vh - 172px);
+}
+
+.search-form,
+.clock-widget,
+.weather-widget {
+  transition:
+    transform 720ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 520ms ease,
+    filter 520ms ease;
+}
+
+.search-input {
+  padding-left: 15px !important;
+  padding-right: 52px !important;
+  background: linear-gradient(135deg, var(--fasp-surface), rgba(255, 255, 255, 0.035)) !important;
+  border-color: color-mix(in srgb, var(--fasp-border) 82%, transparent) !important;
+  backdrop-filter: blur(var(--fasp-glass-blur)) saturate(var(--fasp-glass-saturation));
+  -webkit-backdrop-filter: blur(var(--fasp-glass-blur)) saturate(var(--fasp-glass-saturation));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 12px 34px rgba(0, 0, 0, 0.18);
+}
+
+.weather-widget-link {
+  border-radius: 999px;
+  text-decoration: none;
+  transition:
+    color var(--fasp-duration-fast) ease,
+    opacity var(--fasp-duration-fast) ease,
+    text-shadow var(--fasp-duration-fast) ease;
+}
+
+.weather-widget-link:hover {
+  color: color-mix(in srgb, var(--fasp-accent) 54%, white);
+  text-shadow: 0 0 16px color-mix(in srgb, var(--fasp-accent) 26%, transparent);
+}
+
+html[data-fasp-glass="off"] .search-input {
+  background: color-mix(in srgb, var(--fasp-surface-strong) 88%, #020617) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 10px 26px rgba(0, 0, 0, 0.2);
+}

@@ -1,0 +1,1141 @@
+/* Modern UI surfaces. Disable with faspUi.useLegacySurfaces() in the page console. */
+html.fasp-modern-surfaces .add-tile-overlay {
+  align-items: center !important;
+  padding: 28px !important;
+  background:
+    radial-gradient(circle at 20% 14%, rgba(34, 211, 238, 0.08), transparent 28%),
+    radial-gradient(circle at 82% 18%, rgba(167, 139, 250, 0.11), transparent 30%),
+    rgba(6, 8, 17, 0.76) !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal {
+  display: flex !important;
+  width: min(980px, calc(100vw - 44px)) !important;
+  min-height: min(620px, calc(100vh - 44px)) !important;
+  max-height: min(820px, calc(100vh - 44px)) !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  border-radius: 28px !important;
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  background:
+    linear-gradient(180deg, rgba(28, 32, 49, 0.96), rgba(12, 15, 28, 0.94)),
+    rgba(18, 20, 35, 0.96) !important;
+  box-shadow:
+    0 38px 110px rgba(0, 0, 0, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal > div:first-child {
+  margin: 0 !important;
+  padding: 32px 36px 22px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal > div:first-child h1 {
+  margin: 0 0 8px !important;
+  font-size: 28px !important;
+  line-height: 1.12 !important;
+  letter-spacing: 0 !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal > div:first-child p {
+  max-width: 620px !important;
+  font-size: 14px !important;
+  line-height: 1.55 !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal > div:nth-child(2) {
+  margin: 24px 36px !important;
+  gap: 10px !important;
+  padding: 5px !important;
+  border-radius: 17px !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal > div:nth-child(2) button {
+  height: 46px !important;
+  border-radius: 13px !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal > form,
+html.fasp-modern-surfaces .add-tile-modal > div:nth-child(3) {
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  overflow-y: auto !important;
+  padding: 0 36px 36px !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal label {
+  margin-top: 18px !important;
+  color: rgba(255, 255, 255, 0.72) !important;
+  font-size: 12px !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal input[type="text"] {
+  height: 52px !important;
+  border-radius: 16px !important;
+  border-color: rgba(255, 255, 255, 0.11) !important;
+  background: rgba(255, 255, 255, 0.075) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal form > div:last-child,
+html.fasp-modern-surfaces .add-tile-modal > div:nth-child(3) > div:last-child {
+  position: sticky !important;
+  bottom: 0 !important;
+  margin-top: 28px !important;
+  padding-top: 18px !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: linear-gradient(180deg, rgba(16, 19, 33, 0), rgba(16, 19, 33, 0.96) 28%) !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal {
+  width: min(560px, calc(100vw - 44px)) !important;
+  min-height: 0 !important;
+  max-height: min(760px, calc(100vh - 44px)) !important;
+  overflow-y: auto !important;
+  padding: 22px !important;
+  border-radius: 18px !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal > div:first-child {
+  display: none !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal > div:nth-child(2) {
+  margin: 0 0 20px !important;
+  padding: 0 !important;
+  gap: 28px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal > div:nth-child(2) button {
+  position: relative;
+  height: 36px !important;
+  flex: 0 0 auto !important;
+  padding: 0 0 12px !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.58) !important;
+  box-shadow: none !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal > div:nth-child(2) .add-dialog-tab-active {
+  color: var(--fasp-text) !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal > div:nth-child(2) .add-dialog-tab-active::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--fasp-accent) 15%, transparent), var(--fasp-accent), color-mix(in srgb, var(--fasp-accent) 15%, transparent));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--fasp-accent) 42%, transparent);
+}
+
+html.fasp-modern-surfaces .add-tile-modal > form,
+html.fasp-modern-surfaces .add-tile-modal > div:nth-child(3) {
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal label {
+  margin-top: 14px !important;
+  margin-bottom: 8px !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal input[type="text"] {
+  height: 46px !important;
+  border-radius: 12px !important;
+}
+
+html.fasp-modern-surfaces .add-tile-modal form > div:last-child,
+html.fasp-modern-surfaces .add-tile-modal > div:nth-child(3) > div:last-child {
+  position: static !important;
+  margin-top: 18px !important;
+  padding-top: 0 !important;
+  border-top: 0 !important;
+  background: transparent !important;
+}
+
+html.fasp-modern-surfaces .add-dialog-color-strip {
+  display: flex !important;
+  height: 52px;
+  align-items: center;
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html.fasp-modern-surfaces .add-dialog-color-globe {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  align-items: center;
+  justify-content: center;
+  border: 0 !important;
+  border-radius: 11px !important;
+  background: linear-gradient(135deg, var(--fasp-accent), var(--fasp-accent-2)) !important;
+  color: var(--fasp-on-accent) !important;
+  box-shadow: 0 12px 26px color-mix(in srgb, var(--fasp-accent) 34%, transparent) !important;
+}
+
+html.fasp-modern-surfaces .add-dialog-color-dots {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 9px;
+  padding: 0 12px;
+}
+
+html.fasp-modern-surfaces .add-dialog-color-dot {
+  width: 24px;
+  height: 24px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 8px 18px rgba(0, 0, 0, 0.22) !important;
+}
+
+html.fasp-modern-surfaces .add-dialog-color-dot-active {
+  outline: 2px solid rgba(255, 255, 255, 0.72);
+  outline-offset: 3px;
+}
+
+html.fasp-modern-surfaces .add-dialog-color-custom-dot,
+html.fasp-modern-surfaces .context-color-custom-dot {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.035)) !important;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+html.fasp-modern-surfaces .add-dialog-color-custom-dot:hover,
+html.fasp-modern-surfaces .context-color-custom-dot:hover,
+html.fasp-modern-surfaces .add-dialog-folder-custom-color:hover,
+html.fasp-modern-surfaces .context-folder-custom-color:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.94) !important;
+}
+
+html.fasp-modern-surfaces .add-dialog-folder-create {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 82% 18%, rgba(14, 165, 233, 0.12), transparent 42%),
+    rgba(255, 255, 255, 0.035);
+}
+
+html.fasp-modern-surfaces .add-dialog-folder-preview {
+  display: flex;
+  width: 116px;
+  height: 106px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 2px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(96, 165, 250, 0.22), transparent 50%),
+    rgba(255, 255, 255, 0.055);
+  color: #7584ff;
+}
+
+html.fasp-modern-surfaces .add-dialog-folder-preview svg {
+  filter: drop-shadow(0 14px 24px rgba(99, 102, 241, 0.34));
+}
+
+html.fasp-modern-surfaces .add-dialog-folder-rail {
+  display: flex;
+  height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html.fasp-modern-surfaces .add-dialog-folder-choice {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  border: 0 !important;
+  border-radius: 11px !important;
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.72) !important;
+}
+
+html.fasp-modern-surfaces .add-dialog-folder-choice-active {
+  background: color-mix(in srgb, var(--fasp-accent) 26%, transparent) !important;
+  color: color-mix(in srgb, var(--fasp-accent) 58%, white) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fasp-accent) 82%, transparent) !important;
+}
+
+html.fasp-modern-surfaces .add-dialog-folder-choice span {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+html.fasp-modern-surfaces .add-dialog-folder-custom-color,
+html.fasp-modern-surfaces .context-folder-custom-color {
+  color: rgba(255, 255, 255, 0.58) !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.03em;
+}
+
+html.fasp-modern-surfaces .add-dialog-folder-actions {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+html.fasp-modern-surfaces .add-dialog-folder-actions button {
+  height: 44px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  color: rgba(255, 255, 255, 0.86) !important;
+  font-weight: 600 !important;
+}
+
+html.fasp-modern-surfaces .add-dialog-folder-actions button:first-child {
+  background: rgba(255, 255, 255, 0.075) !important;
+}
+
+html.fasp-modern-surfaces .add-dialog-folder-actions button:last-child {
+  background: linear-gradient(135deg, var(--fasp-accent), color-mix(in srgb, var(--fasp-accent-2) 38%, var(--fasp-accent))) !important;
+  color: var(--fasp-on-accent) !important;
+  box-shadow: 0 16px 28px color-mix(in srgb, var(--fasp-accent) 28%, transparent) !important;
+}
+
+html.fasp-modern-surfaces .add-dialog-bookmark-heading {
+  margin: 18px 0 10px;
+}
+
+html.fasp-modern-surfaces .add-dialog-bookmark-heading span {
+  display: block;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+html.fasp-modern-surfaces .add-dialog-bookmark-heading small {
+  display: block;
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+html.fasp-modern-surfaces .add-tile-modal .add-dialog-bookmark-actions {
+  margin: 26px 0 0 !important;
+  padding: 0 18px 34px !important;
+  box-sizing: border-box;
+}
+
+html.fasp-modern-surfaces .add-tile-modal .add-dialog-bookmark-actions button {
+  flex-shrink: 0;
+}
+
+html.fasp-modern-surfaces .context-menu {
+  border-color: var(--fasp-border) !important;
+  border-radius: 18px !important;
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--fasp-surface-strong) 78%, rgba(5, 7, 16, 0.92)),
+      color-mix(in srgb, var(--fasp-surface-strong) 62%, rgba(2, 6, 23, 0.94))
+    ) !important;
+  backdrop-filter: blur(calc(var(--fasp-glass-blur) + 8px)) saturate(var(--fasp-glass-saturation)) brightness(0.88) !important;
+  -webkit-backdrop-filter: blur(calc(var(--fasp-glass-blur) + 8px)) saturate(var(--fasp-glass-saturation)) brightness(0.88) !important;
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-fasp-glass="off"].fasp-modern-surfaces .context-menu {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--fasp-surface-strong) 96%, #020617),
+      color-mix(in srgb, var(--fasp-surface-strong) 88%, #020617)
+    ) !important;
+  box-shadow:
+    0 16px 42px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
+html.fasp-modern-surfaces .context-main-menu {
+  width: min(312px, calc(100vw - 24px)) !important;
+  min-width: min(312px, calc(100vw - 24px)) !important;
+  max-width: min(312px, calc(100vw - 24px)) !important;
+  max-height: calc(100vh - var(--context-menu-bottom-gap, 46px) - 12px) !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  padding: 6px !important;
+  scrollbar-gutter: stable !important;
+}
+
+html.fasp-modern-surfaces .context-main-menu > div:first-child {
+  padding: 7px 10px 8px !important;
+  color: rgba(255, 255, 255, 0.42) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.08em !important;
+}
+
+html.fasp-modern-surfaces .context-menu-title {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: break-word;
+}
+
+html.fasp-modern-surfaces .context-menu-item {
+  min-height: 36px;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 11px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13.5px;
+  font-weight: 450;
+  line-height: 1.18;
+}
+
+html.fasp-modern-surfaces .context-menu-item:hover {
+  background: rgba(255, 255, 255, 0.105);
+}
+
+html.fasp-modern-surfaces .context-menu hr {
+  margin: 4px;
+  border-color: rgba(255, 255, 255, 0.07);
+}
+
+html.fasp-modern-surfaces .context-menu-icon {
+  width: 18px;
+  height: 18px;
+  color: rgba(214, 221, 237, 0.72);
+}
+
+html.fasp-modern-surfaces .context-line-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+html.fasp-modern-surfaces .context-panel {
+  left: 50% !important;
+  top: 50% !important;
+  width: min(470px, calc(100vw - 36px)) !important;
+  max-height: min(760px, calc(100vh - 36px)) !important;
+  overflow-y: auto !important;
+  padding: 24px !important;
+  transform: translate(-50%, -50%) !important;
+  border-radius: 24px !important;
+  box-shadow:
+    0 34px 110px rgba(0, 0, 0, 0.58),
+    0 0 0 9999px rgba(4, 6, 14, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+
+html.fasp-modern-surfaces .context-panel-wide {
+  width: min(560px, calc(100vw - 36px)) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  background:
+    radial-gradient(circle at 82% 18%, color-mix(in srgb, var(--fasp-accent) 10%, transparent), transparent 34%),
+    linear-gradient(180deg, rgba(27, 29, 45, 0.985), rgba(12, 14, 27, 0.98)) !important;
+  backdrop-filter: blur(12px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(120%) !important;
+  box-shadow:
+    0 34px 110px rgba(0, 0, 0, 0.66),
+    0 0 0 9999px rgba(3, 5, 12, 0.56),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+
+html.fasp-modern-surfaces .context-panel-danger {
+  width: min(420px, calc(100vw - 36px)) !important;
+}
+
+html.fasp-modern-surfaces .context-panel h4 {
+  margin-bottom: 18px !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  font-size: 18px !important;
+  font-weight: 650 !important;
+}
+
+html.fasp-modern-surfaces .context-panel p {
+  color: rgba(255, 255, 255, 0.68) !important;
+  font-size: 15px !important;
+  line-height: 1.5 !important;
+}
+
+html.fasp-modern-surfaces .context-panel form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+html.fasp-modern-surfaces .context-panel .space-y-2 > :not([hidden]) ~ :not([hidden]),
+html.fasp-modern-surfaces .context-panel .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0 !important;
+}
+
+html.fasp-modern-surfaces .context-panel input:not([type="file"]):not([type="color"]) {
+  height: 48px !important;
+  border-radius: 14px !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+  background: rgba(255, 255, 255, 0.075) !important;
+  padding: 0 14px !important;
+  font-size: 14px !important;
+}
+
+html.fasp-modern-surfaces .context-panel input:not([type="file"]):focus {
+  border-color: rgba(167, 139, 250, 0.58) !important;
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.14) !important;
+}
+
+html.fasp-modern-surfaces .context-panel button {
+  min-height: 42px;
+  border-radius: 13px !important;
+}
+
+html.fasp-modern-surfaces .context-panel .context-file-button {
+  min-width: 82px !important;
+  height: 48px !important;
+  padding: 0 14px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.09) !important;
+  color: rgba(255, 255, 255, 0.78) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+html.fasp-modern-surfaces .context-panel .context-file-button:hover {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: rgba(255, 255, 255, 0.94) !important;
+}
+
+html.fasp-modern-surfaces .context-panel .flex.gap-2.pt-1,
+html.fasp-modern-surfaces .context-panel > .flex.gap-2 {
+  gap: 10px !important;
+  padding-top: 8px !important;
+}
+
+html.fasp-modern-surfaces .context-panel-create-tile,
+html.fasp-modern-surfaces .context-panel-create-folder,
+html.fasp-modern-surfaces .context-panel-color-strip,
+html.fasp-modern-surfaces .context-move-popout {
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  background:
+    radial-gradient(circle at 85% 22%, rgba(14, 165, 233, 0.12), transparent 38%),
+    linear-gradient(180deg, rgba(28, 31, 52, 0.96), rgba(13, 16, 32, 0.94)) !important;
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.46),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+}
+
+html.fasp-modern-surfaces .context-panel-create-tile {
+  width: min(410px, calc(100vw - 36px)) !important;
+  padding: 22px !important;
+}
+
+html.fasp-modern-surfaces .context-panel-create-folder {
+  width: min(440px, calc(100vw - 36px)) !important;
+  padding: 26px 24px 18px !important;
+}
+
+html.fasp-modern-surfaces .context-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+html.fasp-modern-surfaces .context-create-tabs {
+  display: flex;
+  gap: 28px;
+  height: 34px;
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+html.fasp-modern-surfaces .context-create-tab {
+  position: relative;
+  min-height: 32px !important;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 13px;
+  font-weight: 550;
+}
+
+html.fasp-modern-surfaces .context-create-tab-active {
+  color: var(--fasp-text);
+}
+
+html.fasp-modern-surfaces .context-create-tab-active::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--fasp-accent) 15%, transparent), var(--fasp-accent), color-mix(in srgb, var(--fasp-accent) 15%, transparent));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--fasp-accent) 42%, transparent);
+}
+
+html.fasp-modern-surfaces .context-field {
+  position: relative;
+  display: flex;
+  height: 46px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.105);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+html.fasp-modern-surfaces .context-field input {
+  width: 100% !important;
+  height: 100% !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.93) !important;
+  font-size: 14px !important;
+  outline: none !important;
+  padding: 0 44px 0 54px !important;
+}
+
+html.fasp-modern-surfaces .context-field select {
+  width: 100% !important;
+  height: 100% !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.88) !important;
+  font-size: 14px !important;
+  outline: none !important;
+  padding: 0 42px 0 60px !important;
+  appearance: none;
+}
+
+html.fasp-modern-surfaces .context-field select option {
+  background: #17141f;
+  color: #f8fafc;
+}
+
+html.fasp-modern-surfaces .context-panel .context-field input:not([type="file"]):not([type="color"]) {
+  padding: 0 44px 0 60px !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.fasp-modern-surfaces .context-folder-name-field input {
+  padding-left: 18px !important;
+}
+
+html.fasp-modern-surfaces .context-panel .context-folder-name-field input:not([type="file"]):not([type="color"]) {
+  padding-left: 18px !important;
+}
+
+html.fasp-modern-surfaces .context-container-picker {
+  position: relative;
+}
+
+html.fasp-modern-surfaces .context-container-trigger {
+  display: flex;
+  width: 100%;
+  height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.105);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 0 13px 0 16px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 14px;
+  text-align: left;
+  transition: border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+html.fasp-modern-surfaces .context-container-trigger:hover,
+html.fasp-modern-surfaces .context-container-trigger:focus-visible {
+  border-color: color-mix(in srgb, var(--fasp-accent) 55%, rgba(255, 255, 255, 0.14));
+  background: rgba(255, 255, 255, 0.065);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--fasp-accent) 14%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+html.fasp-modern-surfaces .context-container-trigger:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+html.fasp-modern-surfaces .context-container-trigger-label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+html.fasp-modern-surfaces .context-container-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.36);
+  border-radius: 999px;
+  box-shadow: 0 0 12px color-mix(in srgb, currentColor 22%, transparent);
+}
+
+html.fasp-modern-surfaces .context-container-chevron {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 15px;
+  line-height: 1;
+  transition: transform 160ms ease;
+}
+
+html.fasp-modern-surfaces .context-container-chevron-open {
+  transform: rotate(180deg);
+}
+
+html.fasp-modern-surfaces .context-container-menu {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  left: 0;
+  top: calc(100% + 6px);
+  max-height: 178px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.115);
+  border-radius: 12px;
+  background: rgba(18, 15, 25, 0.98);
+  box-shadow:
+    0 18px 34px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+
+html.fasp-modern-surfaces .context-container-option {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  padding: 0 10px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  text-align: left;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+html.fasp-modern-surfaces .context-container-option:hover,
+html.fasp-modern-surfaces .context-container-option-active {
+  background: color-mix(in srgb, var(--fasp-accent) 20%, transparent);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+html.fasp-modern-surfaces .context-field:focus-within {
+  border-color: color-mix(in srgb, var(--fasp-accent) 55%, rgba(255, 255, 255, 0.14));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--fasp-accent) 14%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+html.fasp-modern-surfaces .context-field-icon,
+html.fasp-modern-surfaces .context-field-clear {
+  position: absolute;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+html.fasp-modern-surfaces .context-field-icon {
+  left: 16px;
+  width: 18px;
+  height: 18px;
+  color: rgba(255, 255, 255, 0.78);
+  pointer-events: none;
+}
+
+html.fasp-modern-surfaces .context-field-icon-text {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+html.fasp-modern-surfaces .context-field-clear {
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  min-height: 0 !important;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 25px;
+  line-height: 1;
+}
+
+html.fasp-modern-surfaces .context-field-clear:hover {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+html.fasp-modern-surfaces .context-color-strip {
+  display: flex;
+  height: 52px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html.fasp-modern-surfaces .context-color-globe {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  min-height: 0 !important;
+  flex: 0 0 52px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 11px;
+  background: linear-gradient(135deg, var(--fasp-accent), var(--fasp-accent-2)) !important;
+  color: var(--fasp-on-accent);
+  box-shadow: 0 12px 26px color-mix(in srgb, var(--fasp-accent) 34%, transparent);
+}
+
+html.fasp-modern-surfaces .context-color-globe svg {
+  width: 24px;
+  height: 24px;
+}
+
+html.fasp-modern-surfaces .context-color-dots {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 9px;
+  padding: 0 12px;
+}
+
+html.fasp-modern-surfaces .context-color-dot {
+  width: 24px;
+  height: 24px;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0;
+  border-radius: 999px !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 8px 18px rgba(0, 0, 0, 0.22);
+}
+
+html.fasp-modern-surfaces .context-color-dot-active {
+  outline: 2px solid rgba(255, 255, 255, 0.72);
+  outline-offset: 3px;
+}
+
+html.fasp-modern-surfaces .context-action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+html.fasp-modern-surfaces .context-primary-button,
+html.fasp-modern-surfaces .context-secondary-button {
+  height: 44px;
+  min-height: 44px !important;
+  border: 0;
+  border-radius: 12px !important;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+html.fasp-modern-surfaces .context-primary-button {
+  background: linear-gradient(135deg, var(--fasp-accent), color-mix(in srgb, var(--fasp-accent-2) 38%, var(--fasp-accent))) !important;
+  color: var(--fasp-on-accent);
+  box-shadow: 0 16px 28px color-mix(in srgb, var(--fasp-accent) 28%, transparent);
+}
+
+html.fasp-modern-surfaces .context-secondary-button {
+  background: rgba(255, 255, 255, 0.075) !important;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+html.fasp-modern-surfaces .context-folder-preview {
+  display: flex;
+  width: 116px;
+  height: 106px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(96, 165, 250, 0.22), transparent 50%),
+    rgba(255, 255, 255, 0.055);
+  color: #7584ff;
+}
+
+html.fasp-modern-surfaces .context-folder-preview svg {
+  width: 62px;
+  height: 62px;
+  filter: drop-shadow(0 14px 24px rgba(99, 102, 241, 0.34));
+}
+
+html.fasp-modern-surfaces .context-folder-icon-rail {
+  display: flex;
+  height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html.fasp-modern-surfaces .context-folder-icon-choice {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  min-height: 0 !important;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 11px !important;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 15px;
+}
+
+html.fasp-modern-surfaces .context-folder-icon-choice-active {
+  background: color-mix(in srgb, var(--fasp-accent) 26%, transparent) !important;
+  color: color-mix(in srgb, var(--fasp-accent) 58%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fasp-accent) 82%, transparent);
+}
+
+html.fasp-modern-surfaces .context-folder-icon-choice span {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+html.fasp-modern-surfaces .context-panel-color-strip {
+  width: min(364px, calc(100vw - 36px)) !important;
+  padding: 8px 10px 10px !important;
+  transform: none !important;
+}
+
+html.fasp-modern-surfaces .context-panel-color-strip .context-color-strip {
+  height: 50px;
+  border-radius: 11px;
+}
+
+html.fasp-modern-surfaces .context-color-drag-handle {
+  width: 58px;
+  height: 10px;
+  margin: 0 auto 5px;
+  cursor: grab;
+  touch-action: none;
+}
+
+html.fasp-modern-surfaces .context-color-drag-handle::after {
+  content: "";
+  display: block;
+  width: 38px;
+  height: 3px;
+  margin: 3px auto 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+html.fasp-modern-surfaces .context-move-popout {
+  width: 318px;
+  padding: 16px !important;
+  border-radius: 16px;
+}
+
+html.fasp-modern-surfaces .context-move-title {
+  margin-bottom: 18px;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 13px;
+}
+
+html.fasp-modern-surfaces .context-move-search {
+  position: relative;
+  display: flex;
+  height: 40px;
+  align-items: center;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+html.fasp-modern-surfaces .context-move-search input {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  outline: none;
+  padding: 0 42px 0 14px;
+  font-size: 13px;
+}
+
+html.fasp-modern-surfaces .context-move-search span {
+  position: absolute;
+  right: 12px;
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+html.fasp-modern-surfaces .context-move-list {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 2px 0 10px;
+}
+
+html.fasp-modern-surfaces .context-move-row,
+html.fasp-modern-surfaces .context-move-new-folder {
+  display: flex;
+  width: 100%;
+  min-height: 40px;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  text-align: left;
+}
+
+html.fasp-modern-surfaces .context-move-row {
+  padding: 0 8px;
+}
+
+html.fasp-modern-surfaces .context-move-row:hover,
+html.fasp-modern-surfaces .context-move-new-folder:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+html.fasp-modern-surfaces .context-move-folder-icon {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--fasp-accent) 58%, white);
+}
+
+html.fasp-modern-surfaces .context-move-new-folder {
+  height: 44px;
+  padding: 0 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 0;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+html.fasp-modern-surfaces .context-move-new-folder svg {
+  width: 20px;
+  height: 20px;
+}
+
+html.fasp-modern-surfaces .context-move-empty {
+  padding: 12px 8px 18px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 12px;
+}
+
+html.fasp-modern-surfaces .context-submenu-list {
+  max-height: 282px !important;
+  margin: 6px 8px 8px !important;
+  overflow-y: auto !important;
+  padding: 6px !important;
+  border-radius: 15px !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+}
+
+html.fasp-modern-surfaces .context-submenu-row {
+  min-height: 42px !important;
+  border-radius: 11px !important;
+  padding: 10px 12px !important;
+  font-size: 13px !important;
+}
+
+html.fasp-modern-surfaces .context-color-grid {
+  grid-template-columns: repeat(4, minmax(54px, 1fr)) !important;
+  gap: 10px !important;
+}
+
+html.fasp-modern-surfaces .context-color-swatch {
+  height: 54px !important;
+  border-radius: 16px !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 12px 26px rgba(0, 0, 0, 0.18) !important;
+}
+
+html.fasp-modern-surfaces .context-panel-color input[type="color"] {
+  height: 52px !important;
+  border-radius: 15px !important;
+  padding: 6px !important;
+}
