@@ -14,7 +14,7 @@ import {
 
 const PROFILE_SCHEMA_VERSION = 1;
 const APP_NAME = 'Adaptive Start Page';
-const APP_VERSION = '0.1.4';
+const APP_VERSION = '0.1.5';
 const SURFACE_MODE_KEY = 'fasp.ui.surfaceMode';
 
 const STORAGE_KEYS = {

@@ -168,8 +168,12 @@ export const TileCard = memo(function TileCard({
   const showFaviconBadge = hasPreview && faviconSrc && tileVisualMode === 'mixed';
   const tileLabelMode = settings.tileLabelMode || 'compact';
 
-  const bgStyle = !hasPreview && tile.dominantColor
-    ? { background: `linear-gradient(135deg, ${tile.dominantColor}22, ${tile.dominantColor}44)` }
+  const bgStyle = !hasPreview && (tileAccentColor || tile.dominantColor)
+    ? {
+        background: tileAccentColor
+          ? `linear-gradient(135deg, color-mix(in srgb, ${tileAccentColor} 34%, rgba(255,255,255,0.05)), color-mix(in srgb, ${tileAccentColor} 62%, rgba(7,10,20,0.22)))`
+          : `linear-gradient(135deg, ${tile.dominantColor}22, ${tile.dominantColor}44)`,
+      }
     : {};
 
   const handlePreviewError = useCallback(() => {

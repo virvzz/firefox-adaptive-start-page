@@ -56,11 +56,11 @@ The script performs all required build and packaging steps:
 Expected output files:
 
 ```text
-release/adaptive-start-page-0.1.4-unlisted.zip
-release/adaptive-start-page-0.1.4-source.zip
+release/adaptive-start-page-0.1.5-unlisted.zip
+release/adaptive-start-page-0.1.5-source.zip
 ```
 
-The `adaptive-start-page-0.1.4-unlisted.zip` file is the extension package
+The `adaptive-start-page-0.1.5-unlisted.zip` file is the extension package
 submitted for self-distribution signing.
 
 ## Optional verification

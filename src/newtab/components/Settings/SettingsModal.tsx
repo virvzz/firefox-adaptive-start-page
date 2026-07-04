@@ -1987,7 +1987,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">Adaptive Start Page</h3>
-                  <p className="text-sm text-white/40">Версия 0.1.4</p>
+                  <p className="text-sm text-white/40">Версия 0.1.5</p>
                 </div>
               </div>
               <p className="text-sm text-white/50 leading-relaxed">

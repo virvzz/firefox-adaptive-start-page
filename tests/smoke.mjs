@@ -740,6 +740,19 @@ async function smokeBulkTileAccent(page, baseUrl) {
   assert(appliedColors.length === 2, 'Bulk accent smoke should have two tiles');
   assert(appliedColors.every((color) => color === '#22c55e'), 'Bulk accent should apply the selected color to every tile');
 
+  const renderedAccents = await page.evaluate(() => (
+    Array.from(document.querySelectorAll('[data-testid="tile-card"][data-tile-type="tile"]')).map((tile) => ({
+      accented: tile.classList.contains('tile-card-accented'),
+      accentColor: tile.style.getPropertyValue('--tile-accent-color').trim(),
+      hasWash: Boolean(tile.querySelector('.tile-accent-wash')),
+      borderColor: getComputedStyle(tile).borderTopColor,
+    }))
+  ));
+  assert(renderedAccents.length === 2, 'Bulk accent should keep both tile cards rendered');
+  assert(renderedAccents.every((tile) => tile.accented), 'Bulk accent should mark every rendered tile as accented');
+  assert(renderedAccents.every((tile) => tile.accentColor === '#22c55e'), 'Bulk accent should expose the selected color as a CSS variable');
+  assert(renderedAccents.every((tile) => tile.hasWash), 'Bulk accent should render a visible accent wash on every tile');
+
   await page.locator('[data-testid="tile-bulk-color-clear"]').click();
   await page.waitForTimeout(100);
   const clearedColors = await page.evaluate(async () => {
