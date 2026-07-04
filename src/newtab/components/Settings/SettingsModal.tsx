@@ -11,6 +11,7 @@ import { PRESET_THEMES, useThemeStore } from '../../stores/themeStore';
 import { useTileStore } from '../../stores/tilesStore';
 import { saveImageAssetFromDataUrl } from '../../media/mediaAssets';
 import { exportProfileJson, importProfileJson } from '../../profile/profileTransfer';
+import { useProfileSyncStore } from '../../profile/profileSync';
 import type { AppSettings, LayoutConfig, ThemeDefinition, ThemeShadowPreset } from '../../../types';
 
 type Section =
@@ -475,6 +476,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setShowPopularTabsButton,
     setShowRecentlyClosedTabsButton,
     setOptimizeMediaAssets,
+    setExternalPreviewsEnabled,
     setBookmarkFolderMode,
     setSearchResultLimit,
     setShowFolderItemCount,
@@ -486,6 +488,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setTileOpenTarget,
     resetSettings,
   } = useSettingsStore();
+  const profileSync = useProfileSyncStore();
   const {
     activeThemeId,
     customThemes,
@@ -1370,6 +1373,15 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   description="Смешанный режим показывает эскиз страницы и маленькую иконку сайта. Режим иконки оставляет только значок сайта."
                 />
 
+                <section className="settings-theme-card settings-layout-card">
+                  <ToggleSwitch
+                    label="Онлайн-эскизы и иконки сайтов"
+                    description="Загружает эскизы страниц и иконки с внешних сервисов (WordPress mShots, Google Favicons, thum.io). Адреса ваших плиток и закладок будут переданы этим сервисам. Выключено — используются только локальные превью: буква и цвет."
+                    checked={settings.externalPreviewsEnabled}
+                    onChange={setExternalPreviewsEnabled}
+                  />
+                </section>
+
                 <SettingsDropdown
                   label="Подписи плиток"
                   value={settings.tileLabelMode}
@@ -1870,18 +1882,43 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
               )}
             </section>
 
-            <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-              <div className="flex items-start gap-3 text-white/36">
-                <svg width="34" height="34" viewBox="0 0 48 48" fill="none" className="shrink-0 opacity-70" aria-hidden="true">
-                  <path d="M38 22a14 14 0 0 0-27-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M10 26a14 14 0 0 0 27 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                  <path d="M6 14v8h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M42 34v-8h-8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                <p className="text-sm leading-relaxed">
-                  Автоматическая синхронизация через Firefox Sync и облачные сервисы будет добавлена позже.
-                  Сейчас профиль можно перенести вручную одним файлом.
-                </p>
+            <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+              <div className="space-y-3">
+                <ToggleSwitch
+                  label="Синхронизация через Firefox Sync"
+                  description="Автоматически переносит плитки, папки, тему, макет и настройки между вашими устройствами с одним аккаунтом Firefox. Свои изображения и обои не синхронизируются — они остаются на устройстве."
+                  checked={profileSync.enabled}
+                  onChange={(enabled) => void profileSync.setEnabled(enabled)}
+                />
+
+                {profileSync.enabled && (
+                  <div className="flex flex-wrap items-center gap-3 border-t border-white/5 pt-3">
+                    <button
+                      type="button"
+                      data-testid="profile-sync-now-button"
+                      onClick={() => void profileSync.syncNow()}
+                      disabled={profileSync.status === 'syncing'}
+                      className="rounded-xl border border-white/10 bg-white/[0.055] px-4 py-2 text-sm font-semibold text-white/72 transition-all duration-200 hover:bg-white/[0.09] hover:text-white disabled:cursor-wait disabled:opacity-55"
+                    >
+                      {profileSync.status === 'syncing' ? 'Синхронизирую…' : 'Синхронизировать сейчас'}
+                    </button>
+                    <span className="text-xs text-white/45">
+                      {profileSync.status === 'synced' && profileSync.lastSyncedAt
+                        ? `Синхронизировано: ${new Date(profileSync.lastSyncedAt).toLocaleString('ru-RU')}`
+                        : profileSync.status === 'syncing'
+                          ? 'Обмен данными с Firefox Sync…'
+                          : profileSync.status === 'unavailable'
+                            ? 'Firefox Sync недоступен в этой среде.'
+                            : ''}
+                    </span>
+                  </div>
+                )}
+
+                {profileSync.message && (
+                  <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs leading-relaxed text-white/60">
+                    {profileSync.message}
+                  </p>
+                )}
               </div>
             </section>
           </div>

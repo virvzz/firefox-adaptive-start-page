@@ -77,7 +77,10 @@ node.exe .\tests\smoke.mjs
 ```
 
 The smoke test builds the extension, starts a local Vite preview server, and
-checks the main new-tab workflows in a browser.
+checks the main new-tab workflows in a browser. It requires Playwright: either
+install it locally (`npm i -D playwright`), or point `FASP_PLAYWRIGHT_PATH` at
+an existing playwright package (or `FASP_NODE_MODULES_PATH` at a node_modules
+directory that contains one).
 
 ### Project notes
 
@@ -85,6 +88,9 @@ checks the main new-tab workflows in a browser.
   dnd-kit.
 - The production JavaScript is bundled and minified by Vite.
 - No build-time secrets, API keys, remote code, or private services are required.
+- By default no tile URLs leave the browser: previews are rendered locally.
+  Online thumbnails/favicons and the weather widget are opt-in settings that
+  are documented in the UI before enabling.
 - The extension targets Firefox Desktop 142.0 and newer. Firefox for Android is
   not declared in `browser_specific_settings` because the new tab override and
   bookmark APIs used by this project are not supported there.

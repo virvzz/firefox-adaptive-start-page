@@ -1,4 +1,5 @@
 import type { Tile } from '../types';
+import { useSettingsStore } from '../newtab/stores/settingsStore';
 
 function normalizeUrl(url: string): string | null {
   try {
@@ -10,7 +11,25 @@ function normalizeUrl(url: string): string | null {
   }
 }
 
+/**
+ * External favicon/screenshot services receive the tile URL in the request, so
+ * they are only used after the user explicitly enables them in settings.
+ */
+function externalPreviewsAllowed(): boolean {
+  return useSettingsStore.getState().settings.externalPreviewsEnabled;
+}
+
+/**
+ * True for image sources that never trigger a network request to a remote
+ * host: data URLs, blob object URLs, and the extension's own resources.
+ */
+export function isLocalImageSource(src: string | undefined): boolean {
+  if (!src) return false;
+  return /^(data:image\/|blob:|moz-extension:)/i.test(src);
+}
+
 export function getFaviconUrl(url: string): string {
+  if (!externalPreviewsAllowed()) return '';
   const normalized = normalizeUrl(url);
   if (!normalized) return '';
   const host = new URL(normalized).hostname;
@@ -18,12 +37,14 @@ export function getFaviconUrl(url: string): string {
 }
 
 export function getScreenshotThumbnailUrl(url: string): string {
+  if (!externalPreviewsAllowed()) return '';
   const normalized = normalizeUrl(url);
   if (!normalized) return '';
   return `https://s.wordpress.com/mshots/v1/${encodeURIComponent(normalized)}?w=480`;
 }
 
 export function getScreenshotThumbnailFallbackUrl(url: string): string {
+  if (!externalPreviewsAllowed()) return '';
   const normalized = normalizeUrl(url);
   if (!normalized) return '';
   return `https://image.thum.io/get/width/480/crop/360/noanimate/${encodeURI(normalized)}`;

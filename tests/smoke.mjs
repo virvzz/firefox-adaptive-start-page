@@ -8,35 +8,40 @@ import { createServer } from 'node:net';
 const require = createRequire(import.meta.url);
 const rootDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const viteBin = join(rootDir, 'node_modules', 'vite', 'bin', 'vite.js');
-const bundledNodeModules = 'C:/Users/1/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules';
 
-function findBundledPackageCandidates(packageName) {
-  const pnpmDir = join(bundledNodeModules, '.pnpm');
+function findPackageCandidates(nodeModulesDir, packageName) {
+  // Prefer pnpm store entries: they colocate the package with its own
+  // dependencies (e.g. playwright-core), unlike the top-level stub.
+  const pnpmDir = join(nodeModulesDir, '.pnpm');
+  const candidates = [];
   try {
-    return readdirSync(pnpmDir, { withFileTypes: true })
+    candidates.push(...readdirSync(pnpmDir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && entry.name.startsWith(`${packageName}@`))
       .map((entry) => join(pnpmDir, entry.name, 'node_modules', packageName))
       .sort()
-      .reverse();
+      .reverse());
   } catch {
-    return [];
+    // No pnpm store in this node_modules directory.
   }
+  candidates.push(join(nodeModulesDir, packageName));
+  return candidates;
 }
 
-const bundledPlaywrightCandidates = [
+const playwrightCandidates = [
   process.env.FASP_PLAYWRIGHT_PATH,
-  ...findBundledPackageCandidates('playwright'),
-  `${bundledNodeModules}/playwright`,
+  ...(process.env.FASP_NODE_MODULES_PATH
+    ? findPackageCandidates(process.env.FASP_NODE_MODULES_PATH, 'playwright')
+    : []),
 ].filter(Boolean);
 
 function loadPlaywright() {
   try {
     return require('playwright');
   } catch {
-    for (const candidate of bundledPlaywrightCandidates) {
+    for (const candidate of playwrightCandidates) {
       if (existsSync(candidate)) return require(candidate);
     }
-    throw new Error('Playwright is not installed. Install playwright locally or set FASP_PLAYWRIGHT_PATH.');
+    throw new Error('Playwright is not installed. Install playwright locally, or point FASP_PLAYWRIGHT_PATH at a playwright package (or FASP_NODE_MODULES_PATH at a node_modules directory that contains one).');
   }
 }
 

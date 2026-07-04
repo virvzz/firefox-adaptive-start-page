@@ -546,7 +546,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
         type: 'tile',
         title: title.trim() || host,
         url: normalized,
-        thumbnail: img ? undefined : getScreenshotThumbnailUrl(normalized),
+        thumbnail: img ? undefined : (getScreenshotThumbnailUrl(normalized) || undefined),
         customImage: img || undefined,
         dominantColor: img ? undefined : color,
         ...getSelectedContainerFields(),
@@ -613,7 +613,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
         title: title.trim() || fallbackTitle,
         url: normalized,
         customImage: img.trim() || undefined,
-        thumbnail: img.trim() ? undefined : (normalized ? getScreenshotThumbnailUrl(normalized) : undefined),
+        thumbnail: img.trim() ? undefined : (normalized ? (getScreenshotThumbnailUrl(normalized) || undefined) : undefined),
         dominantColor: img.trim() ? undefined : tile.dominantColor,
         ...getSelectedContainerFields(),
       });

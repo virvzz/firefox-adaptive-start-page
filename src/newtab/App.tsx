@@ -6,6 +6,8 @@ import { useLayoutStore } from './stores/layoutStore';
 import { useSettingsStore } from './stores/settingsStore';
 import { useThemeStore } from './stores/themeStore';
 import { useTileStore } from './stores/tilesStore';
+import { openUrlFromStartPage } from './containers/firefoxContainers';
+import { useProfileSyncStore } from './profile/profileSync';
 import { logStartupDebug } from '../debug/startupDebug';
 
 const SettingsPanel = lazy(() => import('./components/Settings/SettingsPanel').then((module) => ({
@@ -63,12 +65,13 @@ interface SearchBrowserApi {
 
 interface SearchItem {
   id: string;
-  type: 'tab' | 'bookmark';
+  type: 'tab' | 'bookmark' | 'tile';
   title: string;
   url: string;
   haystack: string;
   tabId?: number;
   windowId?: number;
+  containerCookieStoreId?: string;
 }
 
 type QuickAccessMode = 'popular' | 'recent';
@@ -484,6 +487,18 @@ function SearchBar({
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const deferredQuery = useDeferredValue(q);
+  const tiles = useTileStore((state) => state.tiles);
+
+  const tileItems = useMemo(() => tiles
+    .filter((tile) => tile.type === 'tile' && tile.url)
+    .map((tile) => ({
+      id: `tile:${tile.id}`,
+      type: 'tile' as const,
+      title: tile.title || tile.url || '',
+      url: tile.url || '',
+      haystack: `${tile.title || ''} ${tile.url || ''}`.toLocaleLowerCase('ru-RU'),
+      containerCookieStoreId: tile.containerCookieStoreId,
+    })), [tiles]);
 
   const refreshSearchItems = useCallback(async () => {
     const api = getSearchBrowserApi();
@@ -536,14 +551,17 @@ function SearchBar({
     const tokens = clean.split(/\s+/).filter(Boolean);
     const limit = Math.max(5, Math.min(100, Math.round(resultLimit)));
     const matches: SearchItem[] = [];
-    for (const item of items) {
-      if (tokens.every((token) => item.haystack.includes(token))) {
-        matches.push(item);
-        if (matches.length >= limit) break;
-      }
+    const seenUrls = new Set<string>();
+    for (const item of [...tileItems, ...items]) {
+      if (!tokens.every((token) => item.haystack.includes(token))) continue;
+      // Own tiles are listed first; skip bookmark duplicates of the same URL.
+      if (item.type === 'bookmark' && seenUrls.has(item.url)) continue;
+      seenUrls.add(item.url);
+      matches.push(item);
+      if (matches.length >= limit) break;
     }
     return matches;
-  }, [deferredQuery, items, resultLimit]);
+  }, [deferredQuery, items, resultLimit, tileItems]);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -552,6 +570,15 @@ function SearchBar({
   const activateItem = useCallback(async (item: SearchItem) => {
     setOpen(false);
     setQ('');
+
+    if (item.type === 'tile') {
+      await openUrlFromStartPage(
+        item.url,
+        useSettingsStore.getState().settings.tileOpenTarget,
+        item.containerCookieStoreId
+      );
+      return;
+    }
 
     if (item.type === 'tab' && typeof item.tabId === 'number') {
       const api = getSearchBrowserApi();
@@ -640,14 +667,14 @@ function SearchBar({
               }`}
             >
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] text-sm">
-                {item.type === 'tab' ? '▣' : '★'}
+                {item.type === 'tab' ? '▣' : item.type === 'tile' ? '▦' : '★'}
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium text-white/82">{item.title}</span>
                 <span className="mt-0.5 block truncate text-xs text-white/36">{item.url}</span>
               </span>
               <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.05] px-2 py-1 text-[10px] uppercase tracking-wide text-white/42">
-                {item.type === 'tab' ? 'вкладка' : 'закладка'}
+                {item.type === 'tab' ? 'вкладка' : item.type === 'tile' ? 'плитка' : 'закладка'}
               </span>
             </button>
           ))}
@@ -983,6 +1010,9 @@ export default function App() {
       if (cancelled) return;
       setStartupReady(true);
       logStartupDebug('app:startup-data-ready');
+
+      // Cross-device sync starts after first paint; it must never block startup.
+      void useProfileSyncStore.getState().initialize().catch(() => {});
     };
 
     void bootstrap().catch(() => {
@@ -1012,6 +1042,39 @@ export default function App() {
     return () => browser.runtime.onMessage.removeListener(handleMessage);
   }, [syncBookmarks]);
 
+  // Alt+1..9 opens the Nth tile of the currently visible surface.
+  useEffect(() => {
+    const handleHotkey = (event: KeyboardEvent) => {
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const digit = Number.parseInt(event.key, 10);
+      if (!Number.isInteger(digit) || digit < 1 || digit > 9) return;
+
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
+
+      const tileState = useTileStore.getState();
+      const { appState } = tileState;
+      const currentContainerId = appState.currentContainerId;
+      const surfaceParentId = currentContainerId === appState.rootContainerId ? null : currentContainerId;
+      const item = tileState.getSurfaceItems(surfaceParentId)[digit - 1];
+      if (!item) return;
+
+      event.preventDefault();
+      if (item.type === 'folder') {
+        tileState.openFolder(item.id, appState.containerStack.length - 1);
+      } else if (item.url) {
+        void openUrlFromStartPage(
+          item.url,
+          useSettingsStore.getState().settings.tileOpenTarget,
+          item.containerCookieStoreId
+        );
+      }
+    };
+
+    window.addEventListener('keydown', handleHotkey);
+    return () => window.removeEventListener('keydown', handleHotkey);
+  }, []);
+
   const weatherInline = settings.showWeather && settings.weatherDisplayMode !== 'card';
   const weatherCard = settings.showWeather && settings.weatherDisplayMode === 'card';
   const widgetsVisible = settings.showSearchBar || settings.showClock || weatherInline;
@@ -1024,12 +1087,17 @@ export default function App() {
     '--fasp-info-card-shadow-percent': `${Math.round(infoCardOpacity * 34)}%`,
   } as CSSProperties;
 
+  // Stable identity: the background layer keeps this callback in its render
+  // effect dependencies, so a changing reference would tear down and rebuild
+  // the renderer after the first frame.
+  const visualReadyRef = useRef(false);
   const handleBackgroundReady = useCallback((kind: string) => {
-    if (visualReady) return;
+    if (visualReadyRef.current) return;
+    visualReadyRef.current = true;
     document.documentElement.dataset.faspVisualReady = 'true';
     setVisualReady(true);
     logStartupDebug('app:visual-ready', { backgroundKind: kind });
-  }, [visualReady]);
+  }, []);
 
   if (!startupReady) {
     return <div className="app-boot-screen" aria-hidden="true" />;

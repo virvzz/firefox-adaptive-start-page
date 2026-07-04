@@ -14,16 +14,29 @@ import {
 
 const PROFILE_SCHEMA_VERSION = 1;
 const APP_NAME = 'Adaptive Start Page';
-const APP_VERSION = '0.1.5';
+const FALLBACK_APP_VERSION = '0.0.0';
 const SURFACE_MODE_KEY = 'fasp.ui.surfaceMode';
 
-const STORAGE_KEYS = {
+function getAppVersion(): string {
+  try {
+    if (typeof browser !== 'undefined' && browser.runtime?.getManifest) {
+      return browser.runtime.getManifest().version || FALLBACK_APP_VERSION;
+    }
+  } catch {
+    // Development preview outside the extension runtime.
+  }
+  return FALLBACK_APP_VERSION;
+}
+
+export const PROFILE_STORAGE_KEYS = {
   settings: 'fasp-settings',
   layout: 'fasp-layout',
   theme: 'fasp-theme-engine',
   background: 'fasp-background',
   tiles: 'fasp.grid-state',
 } as const;
+
+const STORAGE_KEYS = PROFILE_STORAGE_KEYS;
 
 type UiSurfaceMode = 'modern' | 'legacy';
 
@@ -172,7 +185,7 @@ function normalizeProfile(raw: unknown): FaspProfile {
     profile: 'adaptive-start-page',
     schemaVersion: PROFILE_SCHEMA_VERSION,
     appName: APP_NAME,
-    appVersion: typeof raw.appVersion === 'string' ? raw.appVersion : APP_VERSION,
+    appVersion: typeof raw.appVersion === 'string' ? raw.appVersion : getAppVersion(),
     exportedAt: typeof raw.exportedAt === 'string' ? raw.exportedAt : new Date().toISOString(),
     data: {
       settings: normalizeSettings(data.settings as Partial<AppSettings>),
@@ -218,7 +231,7 @@ async function serializeMediaAssets(assetIds: string[]): Promise<SerializedMedia
   return assets;
 }
 
-async function writeLocalStorageValues(values: Record<string, unknown>): Promise<void> {
+export async function writeLocalStorageValues(values: Record<string, unknown>): Promise<void> {
   if (typeof browser !== 'undefined' && browser.storage?.local) {
     await browser.storage.local.set(values);
     return;
@@ -264,7 +277,7 @@ export async function exportProfileJson(): Promise<ExportedProfile> {
     profile: 'adaptive-start-page',
     schemaVersion: PROFILE_SCHEMA_VERSION,
     appName: APP_NAME,
-    appVersion: APP_VERSION,
+    appVersion: getAppVersion(),
     exportedAt: new Date().toISOString(),
     data,
     mediaAssets,

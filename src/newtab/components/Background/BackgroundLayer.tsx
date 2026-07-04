@@ -4,6 +4,12 @@ import { useBackgroundStore } from '../../stores/backgroundStore';
 import { useThemeStore } from '../../stores/themeStore';
 import { readMediaAssetBlob } from '../../media/mediaAssets';
 import { logStartupDebug } from '../../../debug/startupDebug';
+import {
+  createWebglBackground,
+  isWebglBackgroundType,
+  type WebglBackgroundHandle,
+  type WebglPalette,
+} from './webglBackground';
 
 const BACKGROUND_RENDER_SCALE = 0.55;
 const BACKGROUND_MAX_WIDTH = 1280;
@@ -23,14 +29,27 @@ const PIXEL_BACKGROUND_TYPES: Array<NonNullable<BackgroundConfig['generativeType
 ];
 const BACKGROUND_LAYER_CLASS = 'fasp-background-layer fixed inset-0 z-0 h-full w-full bg-cover bg-center bg-no-repeat';
 
+const THEME_STATIC_IMAGE_URL_CACHE_LIMIT = 4;
 const themeStaticImageUrlCache = new Map<string, string>();
 const themeStaticImageUrlPromises = new Map<string, Promise<string | undefined>>();
+
+function touchThemeStaticImageUrl(assetId: string, url: string): void {
+  themeStaticImageUrlCache.delete(assetId);
+  themeStaticImageUrlCache.set(assetId, url);
+  while (themeStaticImageUrlCache.size > THEME_STATIC_IMAGE_URL_CACHE_LIMIT) {
+    const [oldestAssetId, oldestUrl] = themeStaticImageUrlCache.entries().next().value as [string, string];
+    themeStaticImageUrlCache.delete(oldestAssetId);
+    decodedBackgroundImageUrls.delete(oldestUrl);
+    URL.revokeObjectURL(oldestUrl);
+  }
+}
 const decodedBackgroundImageUrls = new Set<string>();
 const decodedBackgroundImageUrlPromises = new Map<string, Promise<boolean>>();
 
 async function loadThemeStaticImageUrl(assetId: string): Promise<string | undefined> {
   const cached = themeStaticImageUrlCache.get(assetId);
   if (cached) {
+    touchThemeStaticImageUrl(assetId, cached);
     logStartupDebug('background:theme-static-url:cache-hit', { assetId });
     return cached;
   }
@@ -49,7 +68,7 @@ async function loadThemeStaticImageUrl(assetId: string): Promise<string | undefi
         return undefined;
       }
       const url = URL.createObjectURL(blob);
-      themeStaticImageUrlCache.set(assetId, url);
+      touchThemeStaticImageUrl(assetId, url);
       logStartupDebug('background:theme-static-url:load-done', {
         assetId,
         blobType: blob.type,
@@ -214,6 +233,24 @@ function isPixelBackground(type: BackgroundConfig['generativeType']): boolean {
   return !type || PIXEL_BACKGROUND_TYPES.includes(type);
 }
 
+const WEBGL_BACKGROUND_MAX_WIDTH = 1920;
+const WEBGL_BACKGROUND_MAX_HEIGHT = 1200;
+
+function toWebglColor(color: RgbColor): [number, number, number] {
+  return [color.r / 255, color.g / 255, color.b / 255];
+}
+
+function toWebglPalette(palette: BackgroundPalette): WebglPalette {
+  return {
+    baseA: toWebglColor(palette.baseA),
+    baseB: toWebglColor(palette.baseB),
+    baseC: toWebglColor(palette.baseC),
+    accent: toWebglColor(palette.accent),
+    accent2: toWebglColor(palette.accent2),
+    danger: toWebglColor(palette.danger),
+  };
+}
+
 function getBackgroundFpsLimit(type: BackgroundConfig['generativeType'], configuredFps: number): number {
   if (type === 'perlin' || !type) return Math.min(configuredFps, PERLIN_BACKGROUND_FPS_LIMIT);
   if (isPixelBackground(type)) return Math.min(configuredFps, PIXEL_BACKGROUND_FPS_LIMIT);
@@ -228,6 +265,7 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
   const animFrameRef = useRef<number>(0);
   const lastTimeRef = useRef<number>(0);
   const imageDataRef = useRef<{ width: number; height: number; imageData: ImageData } | null>(null);
+  const [webglFailed, setWebglFailed] = useState(false);
   const themeStaticAssetId = runtimeTheme.background.style === 'static'
     ? runtimeTheme.background.staticImageAssetId
     : undefined;
@@ -693,28 +731,52 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
       return;
     }
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      logStartupDebug('background:canvas-effect:skip-missing-context');
-      return;
-    }
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const activeGenerativeType = runtimeTheme.background.style === 'generative'
       ? (runtimeTheme.background.generatedType || 'particles')
       : config.generativeType;
+    const resolvedType = activeGenerativeType || 'perlin';
     const pixelBackground = isPixelBackground(activeGenerativeType);
-    const fpsLimit = getBackgroundFpsLimit(activeGenerativeType, config.fpsLimit);
+
+    // Per-pixel effects run as fragment shaders when WebGL is available; the
+    // canvas-2d implementations stay as the fallback and render the draw-call
+    // based effects (particles, automata).
+    let webglHandle: WebglBackgroundHandle | null = null;
+    let ctx: CanvasRenderingContext2D | null = null;
+    if (!webglFailed && isWebglBackgroundType(resolvedType)) {
+      webglHandle = createWebglBackground(canvas, resolvedType, toWebglPalette(palette));
+      if (!webglHandle) {
+        logStartupDebug('background:canvas-effect:webgl-unavailable', { type: resolvedType });
+        // Remount the canvas so a fresh element can hand out a 2d context.
+        setWebglFailed(true);
+        return;
+      }
+    } else {
+      ctx = canvas.getContext('2d');
+      if (!ctx) {
+        logStartupDebug('background:canvas-effect:skip-missing-context');
+        return;
+      }
+    }
+
+    // The GPU renders at (capped) full resolution while the CPU keeps the
+    // downscaled buffer; the shader pattern scale is pinned to the CPU buffer
+    // size via simWidth/simHeight, so both renderers look the same.
+    const fpsLimit = webglHandle
+      ? Math.max(1, Math.min(60, config.fpsLimit))
+      : getBackgroundFpsLimit(activeGenerativeType, config.fpsLimit);
     logStartupDebug('background:canvas-effect:start', {
       themeId: runtimeTheme.id,
       themeBackgroundStyle: runtimeTheme.background.style,
       activeGenerativeType,
       pixelBackground,
+      renderer: webglHandle ? 'webgl' : 'canvas2d',
       fpsLimit,
       animationEnabled: config.animationEnabled,
       prefersReducedMotion,
     });
 
-    const resize = () => {
+    const getSimSize = (): { width: number; height: number } => {
       const renderScale = pixelBackground ? PIXEL_BACKGROUND_RENDER_SCALE : BACKGROUND_RENDER_SCALE;
       const maxWidth = pixelBackground ? PIXEL_BACKGROUND_MAX_WIDTH : BACKGROUND_MAX_WIDTH;
       const maxHeight = pixelBackground ? PIXEL_BACKGROUND_MAX_HEIGHT : BACKGROUND_MAX_HEIGHT;
@@ -723,8 +785,20 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
         maxWidth / Math.max(1, window.innerWidth),
         maxHeight / Math.max(1, window.innerHeight)
       );
-      const width = Math.max(1, Math.floor(window.innerWidth * scale));
-      const height = Math.max(1, Math.floor(window.innerHeight * scale));
+      return {
+        width: Math.max(1, Math.floor(window.innerWidth * scale)),
+        height: Math.max(1, Math.floor(window.innerHeight * scale)),
+      };
+    };
+
+    const resize = () => {
+      const simSize = getSimSize();
+      const width = webglHandle
+        ? Math.max(1, Math.min(window.innerWidth, WEBGL_BACKGROUND_MAX_WIDTH))
+        : simSize.width;
+      const height = webglHandle
+        ? Math.max(1, Math.min(window.innerHeight, WEBGL_BACKGROUND_MAX_HEIGHT))
+        : simSize.height;
       if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
         canvas.height = height;
@@ -734,9 +808,10 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
           height,
           windowWidth: window.innerWidth,
           windowHeight: window.innerHeight,
-          renderScale: scale,
+          renderer: webglHandle ? 'webgl' : 'canvas2d',
         });
       }
+      webglHandle?.resize(width, height, simSize.width, simSize.height);
     };
     resize();
     window.addEventListener('resize', resize);
@@ -750,6 +825,14 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
     else if (activeGenerativeType === 'automata') drawFn = drawAutomata;
     else if (activeGenerativeType === 'reaction-diffusion') drawFn = drawReactionDiffusion;
 
+    const drawFrame = (timeSeconds: number) => {
+      if (webglHandle) {
+        webglHandle.render(timeSeconds);
+      } else if (ctx) {
+        drawFn(ctx, timeSeconds, canvas.width, canvas.height);
+      }
+    };
+
     const render = (timestamp: number) => {
       if (document.visibilityState === 'hidden') {
         animFrameRef.current = requestAnimationFrame(render);
@@ -761,21 +844,20 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
 
       if (elapsed > fpsInterval) {
         lastTimeRef.current = timestamp - (elapsed % fpsInterval);
-        const time = timestamp * 0.001; // seconds
-        drawFn(ctx, time, canvas.width, canvas.height);
+        drawFrame(timestamp * 0.001);
 
-        // Apply blur / brightness via CSS filter on parent
-        // (handled by CSS class)
+        // Blur / brightness are applied through the CSS filter on the element.
       }
 
       animFrameRef.current = requestAnimationFrame(render);
     };
 
     // Draw one frame immediately
-    drawFn(ctx, 0, canvas.width, canvas.height);
+    drawFrame(0);
     logStartupDebug('background:canvas:first-frame', {
       width: canvas.width,
       height: canvas.height,
+      renderer: webglHandle ? 'webgl' : 'canvas2d',
       animated: !prefersReducedMotion && config.animationEnabled,
     });
     notifyReady('generative');
@@ -786,9 +868,10 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
     return () => {
       window.removeEventListener('resize', resize);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      webglHandle?.dispose();
       logStartupDebug('background:canvas-effect:cleanup');
     };
-  }, [config.mode, config.staticImage, config.generativeType, config.animationEnabled, config.fpsLimit, runtimeTheme.background.generatedType, runtimeTheme.background.staticImageAssetId, runtimeTheme.background.style, drawPerlinNoise, drawParticles, drawFractalFlow, drawAurora, drawPlasmaWaves, drawJuliaSet, drawAutomata, drawReactionDiffusion, notifyReady]);
+  }, [config.mode, config.staticImage, config.generativeType, config.animationEnabled, config.fpsLimit, runtimeTheme.background.generatedType, runtimeTheme.background.staticImageAssetId, runtimeTheme.background.style, runtimeTheme.id, palette, webglFailed, drawPerlinNoise, drawParticles, drawFractalFlow, drawAurora, drawPlasmaWaves, drawJuliaSet, drawAutomata, drawReactionDiffusion, notifyReady]);
 
   const filterStyle = `blur(${config.blur}px) brightness(${config.brightness})`;
 
@@ -867,11 +950,22 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
     );
   }
 
+  const generativeTypeForRender = runtimeTheme.background.style === 'generative'
+    ? (runtimeTheme.background.generatedType || 'particles')
+    : config.generativeType;
+  // A canvas element permanently binds to its first context type, so the
+  // renderer switch (webgl <-> 2d) has to remount the element.
+  const canvasRendererKey = !webglFailed && isWebglBackgroundType(generativeTypeForRender || 'perlin')
+    ? 'webgl'
+    : 'canvas2d';
+
   return (
     <canvas
+      key={canvasRendererKey}
       ref={canvasRef}
       data-testid="background-layer"
       data-background-kind="generative"
+      data-background-renderer={canvasRendererKey}
       className="fasp-background-layer fixed inset-0 w-full h-full z-0"
       style={{ filter: filterStyle }}
     />

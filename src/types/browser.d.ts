@@ -13,6 +13,11 @@ declare namespace browser {
       function remove(keys: string | string[]): Promise<void>;
       function clear(): Promise<void>;
     }
+    interface StorageChange {
+      oldValue?: unknown;
+      newValue?: unknown;
+    }
+    const onChanged: Event<(changes: Record<string, StorageChange>, areaName: string) => void>;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -69,6 +74,7 @@ declare namespace browser {
   }
   namespace runtime {
     function sendMessage(message: unknown): Promise<unknown>;
+    function getManifest(): { version?: string };
     const onMessage: Event<(message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => void | boolean | Promise<unknown>>;
   }
   namespace sessions {

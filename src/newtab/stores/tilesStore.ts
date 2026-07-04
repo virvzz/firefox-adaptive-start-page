@@ -356,6 +356,10 @@ function parentOrderSnapshot(tiles: Tile[], parentId: SurfaceParentId | undefine
   return summarizeTileOrder(getSurfaceItems(tiles, normalizeParentId(parentId)));
 }
 
+function sameIdOrder(a: GridItemId[], b: GridItemId[]): boolean {
+  return a.length === b.length && a.every((id, index) => id === b[index]);
+}
+
 function sortIdsByPinnedQueue(state: AppState, ids: GridItemId[]): GridItemId[] {
   const pinned = ids
     .filter((id) => state.items[id]?.pinnedAt)
@@ -932,6 +936,24 @@ async function readBookmarkSubTree(bookmarkId: string): Promise<BookmarkNode | n
   return findBookmarkNode(tree, bookmarkId);
 }
 
+const BOOKMARK_ROOT_SECTIONS = [
+  { id: 'toolbar_____', basePath: 'Панель закладок' },
+  { id: 'menu________', basePath: 'Меню закладок' },
+  { id: 'unfiled_____', basePath: 'Другие закладки' },
+] as const;
+
+async function readBookmarkSections(): Promise<Array<{ nodes: BookmarkNode[]; basePath: string }>> {
+  const sections: Array<{ nodes: BookmarkNode[]; basePath: string }> = [];
+  for (const root of BOOKMARK_ROOT_SECTIONS) {
+    const node = await readBookmarkSubTree(root.id);
+    if (node?.children?.length) sections.push({ nodes: node.children, basePath: root.basePath });
+  }
+  if (sections.length > 0) return sections;
+
+  const fallback = await readBookmarkRoots();
+  return fallback.length > 0 ? [{ nodes: fallback, basePath: 'Избранное' }] : [];
+}
+
 function cloneBookmarkNode(node: BookmarkNode): BookmarkNode {
   return {
     ...node,
@@ -1021,7 +1043,7 @@ function bookmarksToAppState(nodes: BookmarkNode[]): AppState | null {
             bookmarkId: node.id,
             createdAt: node.dateAdded || now,
             updatedAt: now,
-            thumbnail: getScreenshotThumbnailUrl(node.url),
+            thumbnail: getScreenshotThumbnailUrl(node.url) || undefined,
           });
           return [id];
         }
@@ -1078,7 +1100,7 @@ async function importTopSitesState(): Promise<AppState | null> {
         source: 'top-site',
         createdAt: now,
         updatedAt: now,
-        thumbnail: getScreenshotThumbnailUrl(url),
+        thumbnail: getScreenshotThumbnailUrl(url) || undefined,
       });
       return id;
     });
@@ -1649,12 +1671,13 @@ export const useTileStore = create<TilesState>((set, get) => {
       const sourceContainerId = findContainerIdForItem(state, orderedIds[0]);
       if (!sourceContainerId) return;
       const container = state.containers[sourceContainerId];
+      const previousChildren = [...container.childrenIds];
       const orderedSet = new Set(orderedIds);
       const remaining = container.childrenIds.filter((id) => !orderedSet.has(id));
       container.childrenIds = sortIdsByPinnedQueue(state, [...orderedIds, ...remaining].filter((id) => state.items[id]));
       container.updatedAt = Date.now();
       const sourceFolder = sourceContainerId === ROOT_CONTAINER_ID ? undefined : state.items[sourceContainerId];
-      if (isBookmarkReferenceItem(sourceFolder)) {
+      if (isBookmarkReferenceItem(sourceFolder) && !sameIdOrder(previousChildren, container.childrenIds)) {
         for (const [index, itemId] of container.childrenIds.entries()) {
           await moveBrowserBookmark(state.items[itemId], sourceFolder.bookmarkId, index);
         }
@@ -1778,11 +1801,12 @@ export const useTileStore = create<TilesState>((set, get) => {
       item.pinnedAt = item.pinnedAt || Date.now();
       item.updatedAt = Date.now();
       const container = state.containers[sourceContainerId];
+      const previousChildren = [...container.childrenIds];
       container.childrenIds = sortIdsByPinnedQueue(state, container.childrenIds.filter((childId) => state.items[childId]));
       container.updatedAt = Date.now();
 
       const sourceFolder = sourceContainerId === ROOT_CONTAINER_ID ? undefined : state.items[sourceContainerId];
-      if (isBookmarkReferenceItem(sourceFolder)) {
+      if (isBookmarkReferenceItem(sourceFolder) && !sameIdOrder(previousChildren, container.childrenIds)) {
         for (const [index, itemId] of container.childrenIds.entries()) {
           await moveBrowserBookmark(state.items[itemId], sourceFolder.bookmarkId, index);
         }
@@ -1806,11 +1830,12 @@ export const useTileStore = create<TilesState>((set, get) => {
       delete item.pinnedAt;
       item.updatedAt = Date.now();
       const container = state.containers[sourceContainerId];
+      const previousChildren = [...container.childrenIds];
       container.childrenIds = sortIdsByPinnedQueue(state, container.childrenIds.filter((childId) => state.items[childId]));
       container.updatedAt = Date.now();
 
       const sourceFolder = sourceContainerId === ROOT_CONTAINER_ID ? undefined : state.items[sourceContainerId];
-      if (isBookmarkReferenceItem(sourceFolder)) {
+      if (isBookmarkReferenceItem(sourceFolder) && !sameIdOrder(previousChildren, container.childrenIds)) {
         for (const [index, itemId] of container.childrenIds.entries()) {
           await moveBrowserBookmark(state.items[itemId], sourceFolder.bookmarkId, index);
         }
@@ -2004,8 +2029,8 @@ export const useTileStore = create<TilesState>((set, get) => {
     },
 
     listBookmarkFolders: async () => {
-      const roots = await readBookmarkRoots();
-      return listBookmarkFoldersFromNodes(roots);
+      const sections = await readBookmarkSections();
+      return sections.flatMap(({ nodes, basePath }) => listBookmarkFoldersFromNodes(nodes, basePath));
     },
 
     addBookmarkFolder: async (bookmarkFolderId, mode, destinationParentId = null) => {

@@ -18,6 +18,7 @@ interface SettingsState {
   setShowPopularTabsButton: (show: boolean) => Promise<void>;
   setShowRecentlyClosedTabsButton: (show: boolean) => Promise<void>;
   setOptimizeMediaAssets: (enabled: boolean) => Promise<void>;
+  setExternalPreviewsEnabled: (enabled: boolean) => Promise<void>;
   setSearchBarWidth: (width: number) => Promise<void>;
   setSearchResultLimit: (limit: number) => Promise<void>;
   setBookmarkFolderMode: (mode: AppSettings['bookmarkFolderMode']) => Promise<void>;
@@ -45,6 +46,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showPopularTabsButton: false,
   showRecentlyClosedTabsButton: false,
   optimizeMediaAssets: false,
+  externalPreviewsEnabled: false,
   searchBarWidth: 60,
   searchResultLimit: 50,
   bookmarkFolderMode: 'reference',
@@ -99,6 +101,9 @@ export function normalizeSettings(raw: Partial<AppSettings> | Record<string, unk
   normalized.showFolderModeBadge = typeof source.showFolderModeBadge === 'boolean'
     ? source.showFolderModeBadge
     : DEFAULT_SETTINGS.showFolderModeBadge;
+  normalized.externalPreviewsEnabled = typeof source.externalPreviewsEnabled === 'boolean'
+    ? source.externalPreviewsEnabled
+    : DEFAULT_SETTINGS.externalPreviewsEnabled;
 
   if (!['favicon', 'thumbnail', 'mixed'].includes(String(normalized.tileVisualMode))) {
     normalized.tileVisualMode = DEFAULT_SETTINGS.tileVisualMode;
@@ -229,6 +234,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   setOptimizeMediaAssets: async (enabled) => {
     const newSettings = { ...get().settings, optimizeMediaAssets: enabled };
+    set({ settings: newSettings });
+    await saveSettings(newSettings);
+  },
+
+  setExternalPreviewsEnabled: async (enabled) => {
+    const newSettings = { ...get().settings, externalPreviewsEnabled: enabled };
     set({ settings: newSettings });
     await saveSettings(newSettings);
   },

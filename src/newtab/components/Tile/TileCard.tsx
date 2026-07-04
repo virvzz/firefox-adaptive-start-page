@@ -5,6 +5,7 @@ import {
   getFaviconUrl,
   getScreenshotThumbnailFallbackUrl,
   getScreenshotThumbnailUrl,
+  isLocalImageSource,
 } from '../../../engines/tileAppearance';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useThemeStore } from '../../stores/themeStore';
@@ -140,26 +141,35 @@ export const TileCard = memo(function TileCard({
   const glass = runtimeTheme.glass.enabled && (tile.glassmorphism ?? true);
   const customImageAssetUrl = useMediaAssetUrl(tile.customImageAssetId);
 
+  const externalPreviewsEnabled = settings.externalPreviewsEnabled;
+  const allowImageSource = useCallback(
+    (src: string | undefined): src is string => Boolean(src && (externalPreviewsEnabled || isLocalImageSource(src))),
+    [externalPreviewsEnabled]
+  );
+
   const previewCandidates = useMemo(() => {
     if (tile.customImage) return [tile.customImage];
     if (customImageAssetUrl) return [customImageAssetUrl];
     if (tile.dominantColor) return [];
     if (!tile.url) return [];
 
+    // Persisted thumbnails may point at external screenshot services, so they
+    // go through the same consent filter as freshly built URLs.
     return [
-      tile.thumbnail,
+      allowImageSource(tile.thumbnail) ? tile.thumbnail : undefined,
       getScreenshotThumbnailUrl(tile.url),
       getScreenshotThumbnailFallbackUrl(tile.url),
     ].filter((src): src is string => Boolean(src));
-  }, [customImageAssetUrl, tile.customImage, tile.dominantColor, tile.thumbnail, tile.url]);
+  }, [allowImageSource, customImageAssetUrl, tile.customImage, tile.dominantColor, tile.thumbnail, tile.url]);
 
   const tileVisualMode = settings.tileVisualMode || 'mixed';
   const tileAccentColor = tile.tileAccentColor;
   const containerBadgeColor = getContainerColor(tile.containerColor);
   const shouldUsePreview = !preferFaviconOnly && tileVisualMode !== 'favicon';
   const previewSrc = shouldUsePreview ? previewCandidates[previewIndex] : undefined;
-  const faviconSrc = tile.favicon || (tile.url ? getFaviconUrl(tile.url) : '');
-  const partnerFaviconSrc = folderCreatePartner?.favicon
+  const faviconSrc = (allowImageSource(tile.favicon) ? tile.favicon : '')
+    || (tile.url ? getFaviconUrl(tile.url) : '');
+  const partnerFaviconSrc = (allowImageSource(folderCreatePartner?.favicon) ? folderCreatePartner?.favicon : '')
     || (folderCreatePartner?.url ? getFaviconUrl(folderCreatePartner.url) : '');
   const hasPreview = Boolean(previewSrc);
   const folderPreview = tile.type === 'folder' ? folderPreviewItems.slice(0, 4) : [];
@@ -249,7 +259,8 @@ export const TileCard = memo(function TileCard({
           data-preview-count={Math.min(folderPreview.length, 4)}
         >
           {folderPreview.map((child) => {
-            const childFavicon = child.favicon || (child.url ? getFaviconUrl(child.url) : '');
+            const childFavicon = (allowImageSource(child.favicon) ? child.favicon : '')
+              || (child.url ? getFaviconUrl(child.url) : '');
             return (
               <span
                 key={child.id}

@@ -244,6 +244,13 @@ function SortableTile({
       className={`sortable-tile ${isDragging ? 'is-dragging' : ''} ${isContextMenuDimmed ? 'context-menu-dimmed' : ''} ${isContextMenuTarget ? 'context-menu-target' : ''}`}
       {...attributes}
       {...listeners}
+      aria-label={tile.title}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (event.target !== event.currentTarget) return;
+        event.preventDefault();
+        event.currentTarget.querySelector<HTMLElement>('[data-testid="tile-card"]')?.click();
+      }}
     >
       <TileCard
         tile={tile}
@@ -357,6 +364,7 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
   const { settings } = useSettingsStore();
   const {
     tiles,
+    loading: tilesLoading,
     openFolderIds,
     reorderTiles,
     moveTile,
@@ -375,6 +383,7 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
   const [closingOriginRect, setClosingOriginRect] = useState<DebugRect | null>(null);
   const [debugOverlayEnabled, setDebugOverlayEnabled] = useState(() => isTileDebugOverlayEnabled());
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [addDialogEntryMode, setAddDialogEntryMode] = useState<'site' | 'bookmark-folder'>('site');
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -1908,6 +1917,34 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
     : openOriginRect || null;
   const folderAnimationStyle = getFolderAnimationStyle(folderAnimationOrigin);
 
+  // Arrow keys move focus across the grid of this surface (including the
+  // trailing add button); Enter/Space activation lives on the tile wrapper.
+  const handleSurfaceArrowNav = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const { key } = event;
+    if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'ArrowUp' && key !== 'ArrowDown') return;
+    const target = event.target as HTMLElement;
+    if (!(target instanceof HTMLElement)) return;
+    if (!target.classList.contains('sortable-tile') && target.dataset.testid !== 'add-tile-button') return;
+
+    const grid = tileSurfaceRef.current?.querySelector(':scope > .tile-grid');
+    if (!grid) return;
+    const items = Array.from(
+      grid.querySelectorAll<HTMLElement>(':scope > .sortable-tile, :scope > [data-testid="add-tile-button"]')
+    );
+    const index = items.indexOf(target);
+    if (index === -1) return;
+
+    let next = index;
+    if (key === 'ArrowLeft') next = index - 1;
+    else if (key === 'ArrowRight') next = index + 1;
+    else if (key === 'ArrowUp') next = index - effectiveColumns;
+    else next = index + effectiveColumns;
+
+    if (next < 0 || next >= items.length || next === index) return;
+    event.preventDefault();
+    items[next].focus();
+  };
+
   const surface = (
     <div
       ref={tileSurfaceRef}
@@ -1919,7 +1956,40 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
       data-folder-title={title || ''}
       onClickCapture={handleClickCapture}
       onContextMenu={handleContextMenu}
+      onKeyDown={handleSurfaceArrowNav}
     >
+      {level === 0 && !parentId && !tilesLoading && surfaceTiles.length === 0 && (
+        <section className="tile-surface-onboarding glass-strong" data-testid="onboarding-panel">
+          <h2>Добро пожаловать в Adaptive Start Page</h2>
+          <p>
+            Здесь будут ваши плитки: сайты, папки и закладки. Начните с одного из действий,
+            а часы, поиск и погоду можно включить в настройках (шестерёнка справа сверху).
+          </p>
+          <div className="tile-surface-onboarding-actions">
+            <button
+              type="button"
+              data-testid="onboarding-add-site"
+              onClick={() => {
+                setAddDialogEntryMode('site');
+                setShowAddDialog(true);
+              }}
+            >
+              Добавить первый сайт
+            </button>
+            <button
+              type="button"
+              data-testid="onboarding-import-bookmarks"
+              onClick={() => {
+                setAddDialogEntryMode('bookmark-folder');
+                setShowAddDialog(true);
+              }}
+            >
+              Импортировать папку закладок
+            </button>
+          </div>
+        </section>
+      )}
+
       <SortableContext items={surfaceTiles.map((tile) => tile.id)} strategy={sortingStrategy}>
           <div
             style={gridStyle}
@@ -1964,7 +2034,14 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
 
       {showAddDialog && (
         <Suspense fallback={null}>
-          <AddTileModal parentId={parentId} onClose={() => setShowAddDialog(false)} />
+          <AddTileModal
+            parentId={parentId}
+            initialEntryMode={addDialogEntryMode}
+            onClose={() => {
+              setShowAddDialog(false);
+              setAddDialogEntryMode('site');
+            }}
+          />
         </Suspense>
       )}
 

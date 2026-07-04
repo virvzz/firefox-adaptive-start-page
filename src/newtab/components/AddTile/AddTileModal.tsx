@@ -14,15 +14,16 @@ import {
 interface AddTileModalProps {
   onClose: () => void;
   parentId?: string | null;
+  initialEntryMode?: 'site' | 'bookmark-folder';
 }
 
-export function AddTileModal({ onClose, parentId = null }: AddTileModalProps) {
+export function AddTileModal({ onClose, parentId = null, initialEntryMode = 'site' }: AddTileModalProps) {
   const { addTile, tiles, listBookmarkFolders, addBookmarkFolder } = useTileStore();
   const { settings } = useSettingsStore();
   const { runtimeTheme } = useThemeStore();
   const themeAccent = normalizeThemeAccentColor(runtimeTheme.colors.accent);
   const colorSwatches = createThemeColorSwatches(themeAccent);
-  const [entryMode, setEntryMode] = useState<'site' | 'bookmark-folder'>('site');
+  const [entryMode, setEntryMode] = useState<'site' | 'bookmark-folder'>(initialEntryMode);
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
   const [mode, setMode] = useState<'auto' | 'custom'>('auto');
@@ -173,7 +174,7 @@ export function AddTileModal({ onClose, parentId = null }: AddTileModalProps) {
         type: 'tile',
         title: t,
         url: u,
-        thumbnail: mode === 'auto' ? getScreenshotThumbnailUrl(u) : undefined,
+        thumbnail: mode === 'auto' ? (getScreenshotThumbnailUrl(u) || undefined) : undefined,
         customImage: (mode === 'custom' && customImage) ? customImage : undefined,
         dominantColor: (mode === 'custom' && customImage) ? undefined : tileColor,
         containerCookieStoreId: selectedContainerId || undefined,
