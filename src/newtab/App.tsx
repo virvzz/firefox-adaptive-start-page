@@ -8,6 +8,7 @@ import { useThemeStore } from './stores/themeStore';
 import { useTileStore } from './stores/tilesStore';
 import { openUrlFromStartPage } from './containers/firefoxContainers';
 import { useProfileSyncStore } from './profile/profileSync';
+import { analyzeControlContrast } from './contrast/controlContrast';
 import { logStartupDebug } from '../debug/startupDebug';
 
 const SettingsPanel = lazy(() => import('./components/Settings/SettingsPanel').then((module) => ({
@@ -969,9 +970,9 @@ export default function App() {
 
   const { loadTiles, syncBookmarks } = useTileStore();
   const { loadLayout } = useLayoutStore();
-  const { loadBackground } = useBackgroundStore();
+  const { config: backgroundConfig, loadBackground } = useBackgroundStore();
   const { settings, loadSettings } = useSettingsStore();
-  const { loadTheme } = useThemeStore();
+  const { loadTheme, runtimeTheme } = useThemeStore();
 
   useEffect(() => {
     let cancelled = false;
@@ -1080,12 +1081,29 @@ export default function App() {
   const widgetsVisible = settings.showSearchBar || settings.showClock || weatherInline;
   const infoCardTransparency = Math.max(0, Math.min(1, settings.infoCardTransparency ?? 0.32));
   const infoCardOpacity = 1 - infoCardTransparency;
+  const controlContrast = useMemo(() => analyzeControlContrast(settings, backgroundConfig, runtimeTheme), [
+    backgroundConfig.mode,
+    backgroundConfig.staticImage,
+    backgroundConfig.staticImageAssetId,
+    runtimeTheme.background.staticImageAssetId,
+    runtimeTheme.background.style,
+    runtimeTheme.colors.accent,
+    runtimeTheme.colors.surfaceStrong,
+    settings.adaptiveControlContrast,
+  ]);
   const appStyle = {
     '--fasp-info-card-opacity': String(infoCardOpacity),
     '--fasp-info-card-opacity-percent': `${Math.round(infoCardOpacity * 100)}%`,
     '--fasp-info-card-border-percent': `${Math.round(infoCardOpacity * 78)}%`,
     '--fasp-info-card-shadow-percent': `${Math.round(infoCardOpacity * 34)}%`,
   } as CSSProperties;
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.faspControlContrast = controlContrast.enabled ? 'on' : 'off';
+    root.dataset.faspControlContrastReason = controlContrast.reason;
+    root.style.setProperty('--fasp-control-contrast-outline', controlContrast.outlineColor);
+  }, [controlContrast]);
 
   // Stable identity: the background layer keeps this callback in its render
   // effect dependencies, so a changing reference would tear down and rebuild

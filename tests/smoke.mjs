@@ -1042,6 +1042,42 @@ async function smokeProfileTransfer(page, baseUrl) {
   );
 }
 
+async function smokeAdaptiveControlContrast(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await page.locator('[data-testid="settings-button"]').click();
+  await page.locator('[data-testid="settings-modal"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="settings-section-advanced"]').click();
+  await page.locator('[data-testid="adaptive-control-contrast-toggle"]').waitFor({ state: 'visible' });
+
+  const initial = await page.evaluate(() => document.documentElement.dataset.faspControlContrast);
+  assert(initial === 'off', 'Adaptive control contrast should be off by default');
+
+  await page.locator('[data-testid="adaptive-control-contrast-toggle"]').click();
+  await page.waitForFunction(() => document.documentElement.dataset.faspControlContrast === 'on');
+
+  const metrics = await page.evaluate(async () => {
+    const settings = await window.browser.storage.local.get('fasp-settings');
+    const switchElement = document.querySelector('[data-testid="adaptive-control-contrast-toggle"]');
+    const report = document.querySelector('.settings-contrast-report');
+    const styles = switchElement ? getComputedStyle(switchElement) : null;
+    return {
+      saved: settings['fasp-settings']?.adaptiveControlContrast,
+      mode: document.documentElement.dataset.faspControlContrast,
+      reason: document.documentElement.dataset.faspControlContrastReason,
+      reportVisible: Boolean(report),
+      borderColor: styles?.borderTopColor || '',
+      boxShadow: styles?.boxShadow || '',
+    };
+  });
+
+  assert(metrics.saved === true, 'Adaptive control contrast should be saved in settings');
+  assert(metrics.mode === 'on', 'Adaptive control contrast should mark the document root');
+  assert(metrics.reason && metrics.reason !== 'disabled', 'Adaptive control contrast should expose an analysis reason');
+  assert(metrics.reportVisible, 'Adaptive control contrast should show the analysis report');
+  assert(metrics.borderColor !== 'rgba(0, 0, 0, 0)', 'Adaptive control contrast switch should have a visible border');
+  assert(metrics.boxShadow !== 'none', 'Adaptive control contrast switch should have a visible shadow');
+}
+
 async function expectCount(locator, expected, message) {
   const count = await locator.count();
   assert(count === expected, `${message}. Expected ${expected}, got ${count}`);
@@ -1087,11 +1123,12 @@ async function main() {
     await smokeTileTitleTooltip(page, baseUrl);
     await smokeTileContainersAndOpenTarget(page, baseUrl);
     await smokeBulkTileAccent(page, baseUrl);
+    await smokeAdaptiveControlContrast(page, baseUrl);
     await smokeStartupBackgroundHydration(page, baseUrl);
     await smokeProfileTransfer(page, baseUrl);
 
     assert(failures.length === 0, `Browser errors during smoke run:\n${failures.join('\n')}`);
-    console.log('Smoke tests passed: Manifest Permissions, DnD, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Tile Containers/Open Target, Bulk Tile Accent, Startup Background Hydration, Profile Transfer');
+    console.log('Smoke tests passed: Manifest Permissions, DnD, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Tile Containers/Open Target, Bulk Tile Accent, Adaptive Control Contrast, Startup Background Hydration, Profile Transfer');
   } finally {
     if (browser) await browser.close();
     await stopPreview(preview);

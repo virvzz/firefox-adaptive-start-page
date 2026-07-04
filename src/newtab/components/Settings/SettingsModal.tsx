@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, type CSSProperties } from 'react';
 import { SettingsSidebar } from './SettingsSidebar';
 import { SliderControl } from './SliderControl';
 import { ToggleSwitch } from './ToggleSwitch';
@@ -12,6 +12,7 @@ import { useTileStore } from '../../stores/tilesStore';
 import { saveImageAssetFromDataUrl } from '../../media/mediaAssets';
 import { exportProfileJson, importProfileJson } from '../../profile/profileTransfer';
 import { useProfileSyncStore } from '../../profile/profileSync';
+import { analyzeControlContrast } from '../../contrast/controlContrast';
 import { LayoutLivePreview } from './LayoutLivePreview';
 import { ThemeLivePreview } from './ThemeLivePreview';
 import { WeatherLocationField } from './WeatherLocationField';
@@ -84,6 +85,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
     setShowPopularTabsButton,
     setShowRecentlyClosedTabsButton,
     setOptimizeMediaAssets,
+    setAdaptiveControlContrast,
     setExternalPreviewsEnabled,
     setBookmarkFolderMode,
     setSearchResultLimit,
@@ -122,6 +124,16 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const cancelPreviewRef = useRef(cancelPreview);
 
   const themeForEditor = previewTheme || runtimeTheme;
+  const controlContrastAnalysis = useMemo(() => analyzeControlContrast(settings, bg, themeForEditor), [
+    bg.mode,
+    bg.staticImage,
+    bg.staticImageAssetId,
+    settings.adaptiveControlContrast,
+    themeForEditor.background.staticImageAssetId,
+    themeForEditor.background.style,
+    themeForEditor.colors.accent,
+    themeForEditor.colors.surfaceStrong,
+  ]);
   const [colorDrafts, setColorDrafts] = useState<Record<ThemeColorKey, string>>({
     accent: themeForEditor.colors.accent,
     accent2: themeForEditor.colors.accent2,
@@ -1540,6 +1552,31 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
 
             <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
               <div className="mb-3">
+                <h3 className="text-sm font-bold text-white/85">Экспериментальные функции</h3>
+                <p className="mt-1 text-xs text-white/38">Дополнительная читаемость для сложных фонов и спокойных акцентов.</p>
+              </div>
+              <ToggleSwitch
+                label="Адаптивная читаемость переключателей"
+                description="Анализирует фон и акцент темы, затем делает состояние переключателей заметнее."
+                checked={settings.adaptiveControlContrast}
+                onChange={setAdaptiveControlContrast}
+                testId="adaptive-control-contrast-toggle"
+              />
+              <div className="settings-contrast-report mt-4">
+                <div>
+                  <span>Анализ</span>
+                  <strong>{controlContrastAnalysis.title}</strong>
+                  <p>{controlContrastAnalysis.description}</p>
+                </div>
+                <div className="settings-contrast-preview" aria-hidden="true">
+                  <i className="settings-contrast-switch settings-contrast-switch-off"><b /></i>
+                  <i className="settings-contrast-switch settings-contrast-switch-on"><b /></i>
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+              <div className="mb-3">
                 <h3 className="text-sm font-bold text-white/85">Быстрые кнопки</h3>
                 <p className="mt-1 text-xs text-white/38">Прозрачные кнопки на главной странице для системных списков Firefox.</p>
               </div>
@@ -1632,7 +1669,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">Adaptive Start Page</h3>
-                  <p className="text-sm text-white/40">Версия 0.1.5</p>
+                  <p className="text-sm text-white/40">Версия 0.1.7</p>
                 </div>
               </div>
               <p className="text-sm text-white/50 leading-relaxed">

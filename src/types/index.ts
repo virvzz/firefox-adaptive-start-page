@@ -158,6 +158,7 @@ export interface AppSettings {
   showPopularTabsButton: boolean;
   showRecentlyClosedTabsButton: boolean;
   optimizeMediaAssets: boolean;
+  adaptiveControlContrast: boolean;
   externalPreviewsEnabled: boolean;
   searchBarWidth: number; // % of window width
   searchResultLimit: number;
