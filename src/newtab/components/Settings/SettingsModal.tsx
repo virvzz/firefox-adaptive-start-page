@@ -1007,7 +1007,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 <section className="settings-theme-card settings-layout-card">
                   <ToggleSwitch
                     label="Онлайн-эскизы и иконки сайтов"
-                    description="Загружает эскизы страниц и иконки с внешних сервисов (WordPress mShots, DuckDuckGo Icons, Google Favicons, thum.io). Адреса ваших плиток и закладок будут переданы этим сервисам. Выключено — используются только локальные превью: буква и цвет."
+                    description="Загружает эскизы страниц и иконки с внешних сервисов (WordPress mShots, Google Favicons, thum.io). Адреса ваших плиток и закладок будут переданы этим сервисам. Выключено — используются только локальные превью: буква и цвет."
                     checked={settings.externalPreviewsEnabled}
                     onChange={setExternalPreviewsEnabled}
                   />

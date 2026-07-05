@@ -2,14 +2,13 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProper
 import { createPortal } from 'react-dom';
 import type { Tile } from '../../../types';
 import {
-  getFaviconUrls,
+  getFaviconUrl,
   getScreenshotThumbnailFallbackUrl,
   getScreenshotThumbnailUrl,
   isLocalImageSource,
 } from '../../../engines/tileAppearance';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { useTileStore } from '../../stores/tilesStore';
 import { useMediaAssetUrl } from '../../hooks/useMediaAssetUrl';
 import { getContainerColor, openUrlFromStartPage } from '../../containers/firefoxContainers';
 
@@ -79,7 +78,6 @@ export const TileCard = memo(function TileCard({
   const titleTooltipTimerRef = useRef<number | null>(null);
   const { settings } = useSettingsStore();
   const { runtimeTheme } = useThemeStore();
-  const updateTile = useTileStore((state) => state.updateTile);
 
   useEffect(() => {
     setPreviewIndex(0);
@@ -204,62 +202,29 @@ export const TileCard = memo(function TileCard({
 
   const handleIconLoad = useCallback((
     event: React.SyntheticEvent<HTMLImageElement>,
-    src: string,
-    sourceTile: Pick<Tile, 'id' | 'customIcon' | 'favicon'> | undefined = tile
+    src: string
   ) => {
     const image = event.currentTarget;
     if (isLegacyGoogleFaviconSource(src) && image.naturalWidth <= 16 && image.naturalHeight <= 16) {
       markIconSourceFailed(src);
-      return;
     }
-
-    if (
-      !externalPreviewsEnabled
-      || !sourceTile
-      || sourceTile.customIcon
-      || isLocalImageSource(src)
-      || sourceTile.favicon === src
-    ) {
-      return;
-    }
-
-    try {
-      const size = Math.min(64, Math.max(image.naturalWidth || 0, image.naturalHeight || 0));
-      if (size <= 0) return;
-      const canvas = document.createElement('canvas');
-      canvas.width = size;
-      canvas.height = size;
-      const context = canvas.getContext('2d');
-      if (!context) return;
-      context.drawImage(image, 0, 0, size, size);
-      const dataUrl = canvas.toDataURL('image/png');
-      if (!dataUrl.startsWith('data:image/png') || dataUrl.length > 100000 || dataUrl === sourceTile.favicon) return;
-      void updateTile(sourceTile.id, { favicon: dataUrl });
-    } catch {
-      // Cross-origin icons without CORS still render normally; they just cannot
-      // be copied into local storage without broader host permissions.
-    }
-  }, [externalPreviewsEnabled, markIconSourceFailed, tile, updateTile]);
+  }, [markIconSourceFailed]);
   const getVisibleIconSource = useCallback(
     (sources: string[]) => sources.find((src) => src && !failedIconSources.has(src)) || '',
     [failedIconSources]
   );
   const faviconSources = useMemo(() => {
-    const cachedFavicon = isLocalImageSource(tile.favicon) ? tile.favicon : undefined;
     return uniqueIconSources([
       tile.customIcon,
-      cachedFavicon,
-      ...(tile.url ? getFaviconUrls(tile.url) : []),
+      tile.url ? getFaviconUrl(tile.url) : undefined,
     ]);
-  }, [tile.customIcon, tile.favicon, tile.url]);
+  }, [tile.customIcon, tile.url]);
   const partnerFaviconSources = useMemo(() => {
-    const cachedFavicon = isLocalImageSource(folderCreatePartner?.favicon) ? folderCreatePartner?.favicon : undefined;
     return uniqueIconSources([
       folderCreatePartner?.customIcon,
-      cachedFavicon,
-      ...(folderCreatePartner?.url ? getFaviconUrls(folderCreatePartner.url) : []),
+      folderCreatePartner?.url ? getFaviconUrl(folderCreatePartner.url) : undefined,
     ]);
-  }, [folderCreatePartner?.customIcon, folderCreatePartner?.favicon, folderCreatePartner?.url]);
+  }, [folderCreatePartner?.customIcon, folderCreatePartner?.url]);
   const visibleFaviconSrc = getVisibleIconSource(faviconSources);
   const visiblePartnerFaviconSrc = getVisibleIconSource(partnerFaviconSources);
   const tileInitial = getTileInitial(tile);
@@ -355,8 +320,7 @@ export const TileCard = memo(function TileCard({
           {folderPreview.map((child) => {
             const childFaviconSources = uniqueIconSources([
               child.customIcon,
-              isLocalImageSource(child.favicon) ? child.favicon : undefined,
-              ...(child.url ? getFaviconUrls(child.url) : []),
+              child.url ? getFaviconUrl(child.url) : undefined,
             ]);
             const childFavicon = getVisibleIconSource(childFaviconSources);
             return (
@@ -372,7 +336,7 @@ export const TileCard = memo(function TileCard({
                     loading="lazy"
                     decoding="async"
                     referrerPolicy="no-referrer"
-                    onLoad={(event) => handleIconLoad(event, childFavicon, child)}
+                    onLoad={(event) => handleIconLoad(event, childFavicon)}
                     onError={() => markIconSourceFailed(childFavicon)}
                   />
                 ) : getTileInitial(child)}
@@ -461,7 +425,7 @@ export const TileCard = memo(function TileCard({
               </span>
               <span className={`folder-create-preview-icon folder-create-preview-icon-incoming ${visiblePartnerFaviconSrc ? '' : 'tile-generated-icon'}`}>
                 {visiblePartnerFaviconSrc ? (
-                  <img src={visiblePartnerFaviconSrc} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onLoad={(event) => handleIconLoad(event, visiblePartnerFaviconSrc, folderCreatePartner || undefined)} onError={() => markIconSourceFailed(visiblePartnerFaviconSrc)} />
+                  <img src={visiblePartnerFaviconSrc} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onLoad={(event) => handleIconLoad(event, visiblePartnerFaviconSrc)} onError={() => markIconSourceFailed(visiblePartnerFaviconSrc)} />
                 ) : (
                   <span className="tile-generated-icon-letter">{getTileInitial(folderCreatePartner || tile)}</span>
                 )}

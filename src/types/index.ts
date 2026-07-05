@@ -19,7 +19,7 @@ export interface GridItemBase {
   title: string;
   url?: string;
   customIcon?: string;
-  // Best-effort local cache for URL-derived favicons. Manual icons use customIcon.
+  // Legacy favicon field from older profiles. Manual icons use customIcon.
   favicon?: string;
   previewImage?: string;
   thumbnail?: string;
