@@ -61,6 +61,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [profileTransferBusy, setProfileTransferBusy] = useState(false);
   const [tileBulkColor, setTileBulkColor] = useState('#8b5cf6');
   const [tileBulkColorStatus, setTileBulkColorStatus] = useState<string | null>(null);
+  const [tileVisualResetStatus, setTileVisualResetStatus] = useState<string | null>(null);
 
   const { config: layout, setColumns, setFolderColumns, setSpacing } = useLayoutStore();
   const {
@@ -118,6 +119,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const {
     applyAccentColorToAllTiles,
     clearAccentColorFromAllTiles,
+    resetTileVisualsToDefault,
     optimizeMediaAssets,
     restoreMediaAssets,
   } = useTileStore();
@@ -231,6 +233,15 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
         : 'Общий цветовой акцент уже не задан.'
     );
   }, [clearAccentColorFromAllTiles]);
+
+  const handleResetTileVisuals = useCallback(async () => {
+    const result = await resetTileVisualsToDefault();
+    setTileVisualResetStatus(
+      result.updated > 0
+        ? `Плитки возвращены к стандартному виду: ${result.updated}.`
+        : 'Плитки уже используют стандартный вид темы.'
+    );
+  }, [resetTileVisualsToDefault]);
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -996,7 +1007,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 <section className="settings-theme-card settings-layout-card">
                   <ToggleSwitch
                     label="Онлайн-эскизы и иконки сайтов"
-                    description="Загружает эскизы страниц и иконки с внешних сервисов (WordPress mShots, Google Favicons, thum.io). Адреса ваших плиток и закладок будут переданы этим сервисам. Выключено — используются только локальные превью: буква и цвет."
+                    description="Загружает эскизы страниц и иконки с внешних сервисов (WordPress mShots, DuckDuckGo Icons, Google Favicons, thum.io). Адреса ваших плиток и закладок будут переданы этим сервисам. Выключено — используются только локальные превью: буква и цвет."
                     checked={settings.externalPreviewsEnabled}
                     onChange={setExternalPreviewsEnabled}
                   />
@@ -1056,7 +1067,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                         Применяет общий цветовой акцент ко всем плиткам и папкам, не удаляя изображения.
                       </p>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="settings-layout-action-row flex flex-wrap items-center gap-2">
                       <label className="flex w-full min-w-[220px] items-center gap-3 rounded-xl border border-white/10 bg-white/[0.045] px-3 py-2">
                         <input
                           type="color"
@@ -1074,33 +1085,53 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                           aria-label="HEX цвет всех плиток"
                         />
                       </label>
-                      <button
-                        type="button"
-                        data-testid="tile-bulk-color-apply"
-                        onClick={() => void handleApplyTileBulkColor()}
-                        className="rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200"
-                        style={{
-                          background: 'linear-gradient(135deg, var(--fasp-accent), color-mix(in srgb, var(--fasp-accent-2) 38%, var(--fasp-accent)))',
-                          color: 'var(--fasp-on-accent)',
-                          boxShadow: '0 10px 24px color-mix(in srgb, var(--fasp-accent) 22%, transparent)',
-                        }}
-                      >
-                        Применить ко всем
-                      </button>
-                      <button
-                        type="button"
-                        data-testid="tile-bulk-color-clear"
-                        onClick={() => void handleClearTileBulkColor()}
-                        className="rounded-xl border border-white/10 bg-white/[0.055] px-4 py-2 text-sm font-semibold text-white/68 transition-colors hover:bg-white/[0.09] hover:text-white"
-                      >
-                        Сбросить
-                      </button>
+                      <div className="settings-layout-button-row flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          data-testid="tile-bulk-color-apply"
+                          onClick={() => void handleApplyTileBulkColor()}
+                          className="settings-primary-action-button rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-200"
+                        >
+                          Применить ко всем
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="tile-bulk-color-clear"
+                          onClick={() => void handleClearTileBulkColor()}
+                          className="settings-secondary-action-button rounded-xl border border-white/10 bg-white/[0.055] px-5 py-2.5 text-sm font-semibold text-white/68 transition-colors hover:bg-white/[0.09] hover:text-white"
+                        >
+                          Сбросить
+                        </button>
+                      </div>
                     </div>
                     {tileBulkColorStatus && (
                       <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/56">
                         {tileBulkColorStatus}
                       </p>
                     )}
+                    <div className="border-t border-white/5 pt-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-white/85">Вид всех плиток</h3>
+                        <p className="mt-1 text-xs leading-relaxed text-white/38">
+                          Снимает изображения, цветовые заливки и индивидуальные параметры у плиток и папок, возвращая стандартный вид темы.
+                        </p>
+                      </div>
+                      <div className="settings-layout-action-row mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          data-testid="tile-visual-reset"
+                          onClick={() => void handleResetTileVisuals()}
+                          className="settings-secondary-action-button settings-visual-reset-button rounded-xl border border-white/10 bg-white/[0.055] px-5 py-2.5 text-sm font-semibold text-white/72 transition-colors hover:bg-white/[0.09] hover:text-white"
+                        >
+                          Сброс плиток к стандартному виду
+                        </button>
+                      </div>
+                      {tileVisualResetStatus && (
+                        <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/56">
+                          {tileVisualResetStatus}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </section>
 

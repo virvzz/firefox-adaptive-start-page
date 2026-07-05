@@ -569,6 +569,46 @@ html.fasp-dnd-active .tile-preview {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+.tile-generated-icon {
+  border-color: color-mix(in srgb, var(--tile-icon-color) 36%, rgba(255, 255, 255, 0.18)) !important;
+  background:
+    radial-gradient(circle at 32% 24%, color-mix(in srgb, var(--tile-icon-color) 48%, rgba(255, 255, 255, 0.2)), transparent 58%),
+    linear-gradient(145deg, color-mix(in srgb, var(--tile-icon-color) 48%, rgba(255, 255, 255, 0.08)), rgba(8, 11, 20, 0.72)) !important;
+  color: color-mix(in srgb, var(--tile-icon-color) 24%, white) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 12px 24px color-mix(in srgb, var(--tile-icon-color) 18%, rgba(0, 0, 0, 0.24));
+}
+
+.tile-generated-icon-letter {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.32);
+}
+
+.tile-main-icon.tile-generated-icon .tile-generated-icon-letter {
+  font-size: 1.08em;
+  font-weight: 760;
+}
+
+.tile-favicon-badge-generated .tile-generated-icon-letter {
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.folder-preview-cell-generated:not(.folder-preview-cell-folder) {
+  border-color: color-mix(in srgb, var(--tile-icon-color) 30%, rgba(255, 255, 255, 0.16));
+  background:
+    radial-gradient(circle at 32% 24%, color-mix(in srgb, var(--tile-icon-color) 36%, rgba(255, 255, 255, 0.18)), transparent 62%),
+    rgba(255, 255, 255, 0.12);
+  color: color-mix(in srgb, var(--tile-icon-color) 24%, white);
+}
+
 .tile-card.folder-tile {
   border-color: rgba(188, 218, 255, 0.28);
   background:

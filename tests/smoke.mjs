@@ -402,6 +402,38 @@ async function createTile(page, title, url) {
   await page.locator('[data-testid="add-tile-modal"]').waitFor({ state: 'detached' });
 }
 
+async function smokeCustomTileIcon(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  const iconDataUrl = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%2322c55e%22/%3E%3Cpath d=%22M19 35l8 8 18-22%22 fill=%22none%22 stroke=%22white%22 stroke-width=%226%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E';
+
+  await page.locator('[data-testid="add-tile-button"]').first().click();
+  await page.locator('[data-testid="add-tile-modal"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="add-tile-url"]').fill('https://custom-icon.example');
+  await page.locator('[data-testid="add-tile-title"]').fill('Custom Icon');
+  await page.locator('[data-testid="add-tile-icon-input"]').fill(iconDataUrl);
+  await page.locator('[data-testid="create-tile-button"]').click();
+  await page.locator('[data-testid="add-tile-modal"]').waitFor({ state: 'detached' });
+  await page.locator('[data-testid="tile-card"][data-tile-title="Custom Icon"]').waitFor({ state: 'visible' });
+
+  const stored = await page.evaluate(async () => {
+    const result = await window.browser.storage.local.get('fasp.grid-state');
+    const items = Object.values(result['fasp.grid-state']?.state?.items || {});
+    return items[0];
+  });
+  assert(stored.customIcon === iconDataUrl, 'Custom tile icon should be saved separately from tile images');
+  assert(stored.customImage === undefined, 'Custom tile icon should not become a tile background image');
+
+  const rendered = await page.evaluate(() => {
+    const card = document.querySelector('[data-testid="tile-card"][data-tile-title="Custom Icon"]');
+    return {
+      iconSrc: card?.querySelector('.tile-main-icon img')?.getAttribute('src') || '',
+      hasPreview: Boolean(card?.querySelector('.tile-preview')),
+    };
+  });
+  assert(rendered.iconSrc === iconDataUrl, 'Custom tile icon should render in the icon slot');
+  assert(!rendered.hasPreview, 'Custom tile icon should not render as the tile preview image');
+}
+
 async function addBookmarkFolder(page, expectedMode) {
   await page.locator('[data-testid="add-tile-button"]').first().click();
   await page.locator('[data-testid="add-tile-modal"]').waitFor({ state: 'visible' });
@@ -683,6 +715,46 @@ async function smokeTileTitleTooltip(page, baseUrl) {
   await expectCount(page.locator('.tile-title-tooltip'), 0, 'Tile title tooltip should hide when the pointer leaves');
 }
 
+async function smokeContextMenuReadability(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await createTile(page, 'Context Tile', 'https://context.example');
+
+  const tile = page.locator('[data-testid="tile-card"][data-tile-type="tile"]').first();
+  const tileBox = await tile.boundingBox();
+  assert(tileBox, 'Context menu smoke tile should have a bounding box');
+  await page.mouse.click(tileBox.x + tileBox.width / 2, tileBox.y + tileBox.height / 2, { button: 'right' });
+  await page.locator('[data-testid="context-menu"]').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => (
+    document.activeElement?.classList.contains('context-menu-item-active')
+  ));
+
+  const metrics = await page.evaluate(() => {
+    const menu = document.querySelector('[data-testid="context-menu"]');
+    const active = document.activeElement;
+    const menuStyle = menu ? getComputedStyle(menu) : null;
+    const activeStyle = active ? getComputedStyle(active) : null;
+    return {
+      menuVisible: Boolean(menu?.getBoundingClientRect().width && menu?.getBoundingClientRect().height),
+      menuBackground: menuStyle?.backgroundImage || menuStyle?.backgroundColor || '',
+      menuShadow: menuStyle?.boxShadow || '',
+      activeText: active?.textContent?.trim() || '',
+      activeClass: active?.className || '',
+      activeBackground: activeStyle?.backgroundImage || activeStyle?.backgroundColor || '',
+      activeShadow: activeStyle?.boxShadow || '',
+      activeColor: activeStyle?.color || '',
+    };
+  });
+
+  assert(metrics.menuVisible, 'Context menu should be visible over tiles');
+  assert(metrics.menuBackground.includes('gradient'), 'Context menu should use a dense modern surface');
+  assert(metrics.menuShadow !== 'none', 'Context menu should keep a visible separation shadow');
+  assert(metrics.activeText === 'Открыть', 'Context menu should focus the first action');
+  assert(metrics.activeClass.includes('context-menu-item-active'), 'Focused context menu item should get the active class');
+  assert(metrics.activeBackground.includes('gradient'), 'Focused context menu item should use an opaque active surface');
+  assert(metrics.activeShadow !== 'none', 'Focused context menu item should keep a visible active shadow');
+  assert(metrics.activeColor !== 'rgba(255, 255, 255, 0.78)', 'Focused context menu item should increase text contrast');
+}
+
 async function smokeTileContainersAndOpenTarget(page, baseUrl) {
   await clearAppData(page, baseUrl);
   await page.locator('[data-testid="add-tile-button"]').first().click();
@@ -733,6 +805,42 @@ async function smokeBulkTileAccent(page, baseUrl) {
   await page.locator('[data-testid="settings-modal"]').waitFor({ state: 'visible' });
   await page.locator('[data-testid="settings-section-layout"]').click();
   await page.locator('[data-testid="tile-bulk-color-input"]').scrollIntoViewIfNeeded();
+  const bulkApplyButtonMetrics = await page.evaluate(() => {
+    const button = document.querySelector('[data-testid="tile-bulk-color-apply"]');
+    const style = button ? getComputedStyle(button) : null;
+    return {
+      backgroundImage: style?.backgroundImage || '',
+      borderColor: style?.borderTopColor || '',
+      boxShadow: style?.boxShadow || '',
+      color: style?.color || '',
+      minHeight: style?.minHeight || '',
+      paddingLeft: style?.paddingLeft || '',
+      paddingRight: style?.paddingRight || '',
+    };
+  });
+  assert(bulkApplyButtonMetrics.backgroundImage.includes('gradient'), 'Bulk accent apply button should use a themed gradient');
+  assert(bulkApplyButtonMetrics.borderColor !== 'rgba(0, 0, 0, 0)', 'Bulk accent apply button should have a visible border');
+  assert(bulkApplyButtonMetrics.boxShadow !== 'none', 'Bulk accent apply button should have a visible shadow');
+  assert(bulkApplyButtonMetrics.color.length > 0, 'Bulk accent apply button should expose readable text color');
+  assert(parseFloat(bulkApplyButtonMetrics.minHeight) >= 40, 'Bulk accent apply button should keep comfortable vertical padding');
+  assert(
+    parseFloat(bulkApplyButtonMetrics.paddingLeft) >= 18 && parseFloat(bulkApplyButtonMetrics.paddingRight) >= 18,
+    'Bulk accent apply button should keep comfortable horizontal padding'
+  );
+  const actionButtonRowMetrics = await page.evaluate(() => {
+    const selectors = [
+      '[data-testid="tile-bulk-color-apply"]',
+      '[data-testid="tile-bulk-color-clear"]',
+    ];
+    const rects = selectors.map((selector) => document.querySelector(selector)?.getBoundingClientRect());
+    const tops = rects.map((rect) => rect?.top ?? NaN);
+    return {
+      count: rects.filter(Boolean).length,
+      topSpread: Math.max(...tops) - Math.min(...tops),
+    };
+  });
+  assert(actionButtonRowMetrics.count === 2, 'Bulk action row should render both color buttons');
+  assert(actionButtonRowMetrics.topSpread <= 12, 'Bulk color action buttons should stay in one row on desktop');
   await page.locator('[data-testid="tile-bulk-color-input"]').fill('#22c55e');
   await page.locator('[data-testid="tile-bulk-color-apply"]').click();
   await page.waitForTimeout(100);
@@ -758,14 +866,128 @@ async function smokeBulkTileAccent(page, baseUrl) {
   assert(renderedAccents.every((tile) => tile.accentColor === '#22c55e'), 'Bulk accent should expose the selected color as a CSS variable');
   assert(renderedAccents.every((tile) => tile.hasWash), 'Bulk accent should render a visible accent wash on every tile');
 
-  await page.locator('[data-testid="tile-bulk-color-clear"]').click();
-  await page.waitForTimeout(100);
-  const clearedColors = await page.evaluate(async () => {
+  await page.keyboard.press('Escape');
+  await page.locator('[data-testid="settings-modal"]').waitFor({ state: 'detached' });
+  await page.locator('[data-testid="add-tile-button"]').first().click();
+  await page.locator('[data-testid="add-tile-modal"]').waitFor({ state: 'visible' });
+  const inheritedColorCode = await page.locator('[data-testid="add-tile-color-code"]').inputValue();
+  assert(inheritedColorCode === '#22C55E', 'New tile dialog should show the predominant tile color as HEX');
+  await page.locator('[data-testid="add-tile-url"]').fill('https://accent-gamma.example');
+  await page.locator('[data-testid="add-tile-title"]').fill('Accent Gamma');
+  await page.locator('[data-testid="create-tile-button"]').click();
+  await page.locator('[data-testid="add-tile-modal"]').waitFor({ state: 'detached' });
+
+  const inheritedColors = await page.evaluate(async () => {
     const result = await window.browser.storage.local.get('fasp.grid-state');
     const items = Object.values(result['fasp.grid-state']?.state?.items || {});
     return items.map((item) => item.tileAccentColor);
   });
-  assert(clearedColors.every((color) => color === undefined), 'Bulk accent reset should clear the shared tile accent');
+  assert(inheritedColors.length === 3, 'Bulk accent inheritance smoke should have three tiles');
+  assert(inheritedColors.every((color) => color === '#22c55e'), 'New tiles should inherit the predominant tile accent color');
+}
+
+async function smokeTileVisualReset(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await page.evaluate(async () => {
+    const now = Date.now();
+    await window.browser.storage.local.set({
+      'fasp.grid-state': {
+        schemaVersion: 3,
+        state: {
+          items: {
+            'tile-reset-smoke': {
+              id: 'tile-reset-smoke',
+              type: 'tile',
+              title: 'Styled Tile',
+              url: 'https://example.com',
+              customImage: 'data:image/png;base64,iVBORw0KGgo=',
+              thumbnail: 'https://example.com/tile.png',
+              customIcon: 'data:image/png;base64,iVBORw0KGgo=',
+              dominantColor: '#604848',
+              tileAccentColor: '#604848',
+              favicon: 'data:image/png;base64,iVBORw0KGgo=',
+              faviconUpdatedAt: now,
+              glassmorphism: false,
+              borderRadius: 28,
+              opacity: 0.42,
+              createdAt: now,
+              updatedAt: now,
+              order: 0,
+            },
+            'folder-reset-smoke': {
+              id: 'folder-reset-smoke',
+              type: 'folder',
+              title: 'Styled Folder',
+              childrenIds: [],
+              customImage: 'data:image/png;base64,iVBORw0KGgo=',
+              thumbnail: 'https://example.com/folder.png',
+              customIcon: 'data:image/png;base64,iVBORw0KGgo=',
+              dominantColor: '#604848',
+              tileAccentColor: '#604848',
+              favicon: 'data:image/png;base64,iVBORw0KGgo=',
+              faviconUpdatedAt: now,
+              glassmorphism: false,
+              borderRadius: 28,
+              opacity: 0.42,
+              createdAt: now,
+              updatedAt: now,
+              order: 0,
+            },
+          },
+          containers: {
+            root: {
+              id: 'root',
+              title: 'Root',
+              childrenIds: ['tile-reset-smoke', 'folder-reset-smoke'],
+              createdAt: now,
+              updatedAt: now,
+            },
+            'folder-reset-smoke': {
+              id: 'folder-reset-smoke',
+              title: 'Styled Folder',
+              parentId: 'root',
+              childrenIds: [],
+              createdAt: now,
+              updatedAt: now,
+            },
+          },
+          rootContainerId: 'root',
+          currentContainerId: 'root',
+          containerStack: ['root'],
+          dragState: null,
+        },
+      },
+    });
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="tile-surface-root"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="settings-button"]').click();
+  await page.locator('[data-testid="settings-modal"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="settings-section-layout"]').click();
+  await page.locator('[data-testid="tile-visual-reset"]').click();
+  await page.locator('text=Плитки возвращены к стандартному виду').waitFor({ state: 'visible' });
+
+  const { tile, folder } = await page.evaluate(async () => {
+    const result = await window.browser.storage.local.get('fasp.grid-state');
+    const items = result['fasp.grid-state']?.state?.items || {};
+    return {
+      tile: items['tile-reset-smoke'],
+      folder: items['folder-reset-smoke'],
+    };
+  });
+  for (const item of [tile, folder]) {
+    assert(item, 'Tile visual reset smoke should keep every item');
+    assert(item.customImage === undefined, 'Tile visual reset should clear custom images');
+    assert(item.thumbnail === undefined, 'Tile visual reset should clear thumbnails');
+    assert(item.customIcon === undefined, 'Tile visual reset should clear custom icons');
+    assert(item.dominantColor === undefined, 'Tile visual reset should clear dominant color');
+    assert(item.tileAccentColor === undefined, 'Tile visual reset should clear tile accent color');
+    assert(item.favicon === undefined, 'Tile visual reset should clear cached favicons');
+    assert(item.faviconUpdatedAt === undefined, 'Tile visual reset should clear favicon timestamps');
+    assert(item.glassmorphism === undefined, 'Tile visual reset should return to theme glass setting');
+    assert(item.borderRadius === undefined, 'Tile visual reset should clear custom radius');
+    assert(item.opacity === undefined, 'Tile visual reset should clear custom opacity');
+  }
 }
 
 async function smokeStartupBackgroundHydration(page, baseUrl) {
@@ -1116,19 +1338,22 @@ async function main() {
     });
 
     await smokeDnd(page, baseUrl);
+    await smokeCustomTileIcon(page, baseUrl);
     await smokeReferenceClone(page, baseUrl);
     await smokeThemeEngine(page, baseUrl);
     await smokeLayoutSettings(page, baseUrl);
     await smokeStartupFolderState(page, baseUrl);
     await smokeTileTitleTooltip(page, baseUrl);
+    await smokeContextMenuReadability(page, baseUrl);
     await smokeTileContainersAndOpenTarget(page, baseUrl);
     await smokeBulkTileAccent(page, baseUrl);
+    await smokeTileVisualReset(page, baseUrl);
     await smokeAdaptiveControlContrast(page, baseUrl);
     await smokeStartupBackgroundHydration(page, baseUrl);
     await smokeProfileTransfer(page, baseUrl);
 
     assert(failures.length === 0, `Browser errors during smoke run:\n${failures.join('\n')}`);
-    console.log('Smoke tests passed: Manifest Permissions, DnD, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Tile Containers/Open Target, Bulk Tile Accent, Adaptive Control Contrast, Startup Background Hydration, Profile Transfer');
+    console.log('Smoke tests passed: Manifest Permissions, DnD, Custom Tile Icon, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Context Menu Readability, Tile Containers/Open Target, Bulk Tile Accent, Tile Visual Reset, Adaptive Control Contrast, Startup Background Hydration, Profile Transfer');
   } finally {
     if (browser) await browser.close();
     await stopPreview(preview);

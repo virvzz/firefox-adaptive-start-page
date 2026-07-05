@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTileStore, type BookmarkFolderOption } from '../../stores/tilesStore';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -10,6 +10,11 @@ import {
   listFirefoxContainers,
   type FirefoxContainer,
 } from '../../containers/firefoxContainers';
+import {
+  formatTileHexColor,
+  getPredominantTileColor,
+  normalizeTileHexColor,
+} from '../../tiles/tileColor';
 
 interface AddTileModalProps {
   onClose: () => void;
@@ -23,14 +28,21 @@ export function AddTileModal({ onClose, parentId = null, initialEntryMode = 'sit
   const { runtimeTheme } = useThemeStore();
   const themeAccent = normalizeThemeAccentColor(runtimeTheme.colors.accent);
   const colorSwatches = createThemeColorSwatches(themeAccent);
+  const inheritedDefaultColor = useMemo(
+    () => getPredominantTileColor(tiles, parentId, themeAccent),
+    [parentId, themeAccent, tiles]
+  );
   const [entryMode, setEntryMode] = useState<'site' | 'bookmark-folder'>(initialEntryMode);
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
   const [mode, setMode] = useState<'auto' | 'custom'>('auto');
   const [customImage, setCustomImage] = useState('');
-  const [tileColor, setTileColor] = useState(themeAccent);
+  const [customIcon, setCustomIcon] = useState('');
+  const [tileColor, setTileColor] = useState(inheritedDefaultColor.color);
+  const [tileColorTouched, setTileColorTouched] = useState(false);
   const [folderTitle, setFolderTitle] = useState('');
-  const [folderColor, setFolderColor] = useState(themeAccent);
+  const [folderColor, setFolderColor] = useState(inheritedDefaultColor.color);
+  const [folderColorTouched, setFolderColorTouched] = useState(false);
   const [urlValid, setUrlValid] = useState(false);
   const [faviconHost, setFaviconHost] = useState('');
   const [autoPreviewUrl, setAutoPreviewUrl] = useState('');
@@ -44,9 +56,28 @@ export function AddTileModal({ onClose, parentId = null, initialEntryMode = 'sit
   const [selectedContainerId, setSelectedContainerId] = useState('');
   const [containerMenuOpen, setContainerMenuOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const iconFileRef = useRef<HTMLInputElement>(null);
   const tileColorRef = useRef<HTMLInputElement>(null);
   const folderColorRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!tileColorTouched) setTileColor(inheritedDefaultColor.color);
+  }, [inheritedDefaultColor.color, tileColorTouched]);
+
+  useEffect(() => {
+    if (!folderColorTouched) setFolderColor(inheritedDefaultColor.color);
+  }, [folderColorTouched, inheritedDefaultColor.color]);
+
+  const setTileColorExplicit = useCallback((nextColor: string) => {
+    setTileColorTouched(true);
+    setTileColor((currentColor) => normalizeTileHexColor(nextColor, currentColor));
+  }, []);
+
+  const setFolderColorExplicit = useCallback((nextColor: string) => {
+    setFolderColorTouched(true);
+    setFolderColor((currentColor) => normalizeTileHexColor(nextColor, currentColor));
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -142,11 +173,19 @@ export function AddTileModal({ onClose, parentId = null, initialEntryMode = 'sit
     ));
   }, [bookmarkFolders]);
 
-  const handleFile = useCallback((file: File) => {
+  const readImageFile = useCallback((file: File, onLoad: (dataUrl: string) => void) => {
     const reader = new FileReader();
-    reader.onload = () => setCustomImage(reader.result as string);
+    reader.onload = () => onLoad(reader.result as string);
     reader.readAsDataURL(file);
   }, []);
+
+  const handleFile = useCallback((file: File) => {
+    readImageFile(file, setCustomImage);
+  }, [readImageFile]);
+
+  const handleIconFile = useCallback((file: File) => {
+    readImageFile(file, setCustomIcon);
+  }, [readImageFile]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -168,6 +207,9 @@ export function AddTileModal({ onClose, parentId = null, initialEntryMode = 'sit
       const hostname = new URL(u).hostname.replace('www.', '');
       const t = title.trim() || hostname;
       const selectedContainer = containers.find((container) => container.cookieStoreId === selectedContainerId);
+      const hasCustomImage = mode === 'custom' && Boolean(customImage);
+      const normalizedTileColor = normalizeTileHexColor(tileColor, inheritedDefaultColor.color);
+      const shouldApplyAccent = !hasCustomImage && (tileColorTouched || inheritedDefaultColor.source !== 'fallback');
 
       addTile({
         id: crypto.randomUUID(),
@@ -175,8 +217,10 @@ export function AddTileModal({ onClose, parentId = null, initialEntryMode = 'sit
         title: t,
         url: u,
         thumbnail: mode === 'auto' ? (getScreenshotThumbnailUrl(u) || undefined) : undefined,
-        customImage: (mode === 'custom' && customImage) ? customImage : undefined,
-        dominantColor: (mode === 'custom' && customImage) ? undefined : tileColor,
+        customImage: hasCustomImage ? customImage : undefined,
+        customIcon: customIcon.trim() || undefined,
+        dominantColor: hasCustomImage ? undefined : normalizedTileColor,
+        tileAccentColor: shouldApplyAccent ? normalizedTileColor : undefined,
         containerCookieStoreId: selectedContainerId || undefined,
         containerName: selectedContainerId ? selectedContainer?.name : undefined,
         containerColor: selectedContainerId ? selectedContainer?.color : undefined,
@@ -188,24 +232,27 @@ export function AddTileModal({ onClose, parentId = null, initialEntryMode = 'sit
 
       onClose();
     } catch { /* invalid url */ }
-  }, [url, title, containers, mode, customImage, selectedContainerId, tileColor, tiles, parentId, addTile, onClose]);
+  }, [url, title, containers, mode, customImage, customIcon, inheritedDefaultColor.color, inheritedDefaultColor.source, selectedContainerId, tileColor, tileColorTouched, tiles, parentId, addTile, onClose]);
 
   const handleCreateFolder = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     const name = folderTitle.trim() || 'Новая папка';
+    const normalizedFolderColor = normalizeTileHexColor(folderColor, inheritedDefaultColor.color);
+    const shouldApplyAccent = folderColorTouched || inheritedDefaultColor.source !== 'fallback';
     await addTile({
       id: crypto.randomUUID(),
       type: 'folder',
       title: name,
       childrenIds: [],
-      dominantColor: folderColor,
+      dominantColor: normalizedFolderColor,
+      tileAccentColor: shouldApplyAccent ? normalizedFolderColor : undefined,
       parentId: parentId || undefined,
       order: tiles.filter(ti => (parentId ? ti.parentId === parentId : !ti.parentId)).length,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
     onClose();
-  }, [addTile, folderColor, folderTitle, onClose, parentId, tiles]);
+  }, [addTile, folderColor, folderColorTouched, folderTitle, inheritedDefaultColor.color, inheritedDefaultColor.source, onClose, parentId, tiles]);
 
   const handleAddBookmarkFolder = useCallback(async (bookmarkFolderId: string) => {
     await addBookmarkFolder(bookmarkFolderId, settings.bookmarkFolderMode, parentId);
@@ -606,7 +653,7 @@ export function AddTileModal({ onClose, parentId = null, initialEntryMode = 'sit
             <button
               type="button"
               className="add-dialog-color-globe"
-              onClick={() => setTileColor(themeAccent)}
+              onClick={() => setTileColorExplicit(themeAccent)}
               aria-label="Основной цвет"
             >
               <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -623,7 +670,7 @@ export function AddTileModal({ onClose, parentId = null, initialEntryMode = 'sit
                   type="button"
                   className={`add-dialog-color-dot ${tileColor === swatch ? 'add-dialog-color-dot-active' : ''}`}
                   style={{ background: swatch }}
-                  onClick={() => setTileColor(swatch)}
+                  onClick={() => setTileColorExplicit(swatch)}
                   aria-label={swatch}
                 />
               ))}
@@ -641,9 +688,128 @@ export function AddTileModal({ onClose, parentId = null, initialEntryMode = 'sit
             ref={tileColorRef}
             type="color"
             value={tileColor}
-            onChange={(event) => setTileColor(event.target.value)}
+            onChange={(event) => setTileColorExplicit(event.target.value)}
             className="hidden"
           />
+          <input
+            type="text"
+            className="tile-color-code-field"
+            value={formatTileHexColor(tileColor, inheritedDefaultColor.color)}
+            readOnly
+            spellCheck={false}
+            aria-label="HEX цвет плитки"
+            data-testid="add-tile-color-code"
+            onFocus={(event) => event.currentTarget.select()}
+          />
+
+          <label style={{
+            display: 'block',
+            marginTop: '22px',
+            marginBottom: '10px',
+            color: 'rgba(255,255,255,0.84)',
+            fontSize: '14px',
+            fontWeight: 600,
+          }}>
+            Иконка плитки
+          </label>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '54px minmax(0, 1fr) auto auto',
+            gap: '8px',
+            alignItems: 'center',
+          }}>
+            <div
+              aria-hidden="true"
+              style={{
+                width: '54px',
+                height: '54px',
+                borderRadius: '14px',
+                border: '1px solid rgba(255,255,255,0.1)',
+                background: 'rgba(255,255,255,0.06)',
+                display: 'grid',
+                placeItems: 'center',
+                overflow: 'hidden',
+              }}
+            >
+              {customIcon ? (
+                <img
+                  src={customIcon}
+                  alt=""
+                  style={{ width: '34px', height: '34px', objectFit: 'contain' }}
+                />
+              ) : (
+                <span style={{ color: 'rgba(255,255,255,0.42)', fontSize: '18px', fontWeight: 700 }}>
+                  {(faviconHost || title || '?').trim()[0]?.toUpperCase() || '?'}
+                </span>
+              )}
+            </div>
+            <input
+              type="text"
+              data-testid="add-tile-icon-input"
+              placeholder="URL иконки или файл"
+              value={customIcon}
+              onChange={(event) => setCustomIcon(event.target.value)}
+              style={{
+                minWidth: 0,
+                height: '54px',
+                borderRadius: '14px',
+                padding: '0 14px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.07)',
+                color: 'white',
+                fontSize: '14px',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+            <button
+              type="button"
+              data-testid="add-tile-icon-file"
+              onClick={() => iconFileRef.current?.click()}
+              style={{
+                height: '54px',
+                border: 0,
+                borderRadius: '14px',
+                background: 'rgba(255,255,255,0.075)',
+                color: 'rgba(255,255,255,0.72)',
+                padding: '0 16px',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Файл
+            </button>
+            <button
+              type="button"
+              data-testid="add-tile-icon-clear"
+              disabled={!customIcon}
+              onClick={() => setCustomIcon('')}
+              style={{
+                height: '54px',
+                border: 0,
+                borderRadius: '14px',
+                background: customIcon ? 'rgba(255,255,255,0.075)' : 'rgba(255,255,255,0.035)',
+                color: customIcon ? 'rgba(255,255,255,0.68)' : 'rgba(255,255,255,0.24)',
+                padding: '0 14px',
+                fontSize: '14px',
+                fontWeight: 600,
+                cursor: customIcon ? 'pointer' : 'not-allowed',
+              }}
+            >
+              Очистить
+            </button>
+            <input
+              ref={iconFileRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              style={{ display: 'none' }}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) handleIconFile(file);
+              }}
+            />
+          </div>
 
           {/* Preview / Upload area */}
           {mode === 'auto' && urlValid && (
@@ -857,7 +1023,7 @@ export function AddTileModal({ onClose, parentId = null, initialEntryMode = 'sit
                 <button
                   type="button"
                   className={`add-dialog-folder-choice ${folderColor === themeAccent ? 'add-dialog-folder-choice-active' : ''}`}
-                  onClick={() => setFolderColor(themeAccent)}
+                  onClick={() => setFolderColorExplicit(themeAccent)}
                 >
                   <svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
@@ -868,7 +1034,7 @@ export function AddTileModal({ onClose, parentId = null, initialEntryMode = 'sit
                     key={swatch}
                     type="button"
                     className={`add-dialog-folder-choice ${folderColor === swatch ? 'add-dialog-folder-choice-active' : ''}`}
-                    onClick={() => setFolderColor(swatch)}
+                    onClick={() => setFolderColorExplicit(swatch)}
                     aria-label={swatch}
                   >
                     <span style={{ background: swatch }} />
@@ -887,8 +1053,18 @@ export function AddTileModal({ onClose, parentId = null, initialEntryMode = 'sit
                 ref={folderColorRef}
                 type="color"
                 value={folderColor}
-                onChange={(event) => setFolderColor(event.target.value)}
+                onChange={(event) => setFolderColorExplicit(event.target.value)}
                 className="hidden"
+              />
+              <input
+                type="text"
+                className="tile-color-code-field"
+                value={formatTileHexColor(folderColor, inheritedDefaultColor.color)}
+                readOnly
+                spellCheck={false}
+                aria-label="HEX цвет папки"
+                data-testid="add-folder-color-code"
+                onFocus={(event) => event.currentTarget.select()}
               />
               <div className="add-dialog-folder-actions">
                 <button type="button" onClick={onClose}>Отмена</button>

@@ -219,6 +219,34 @@ html.fasp-modern-surfaces .add-dialog-color-dot-active {
   outline-offset: 3px;
 }
 
+html.fasp-modern-surfaces .tile-color-code-field {
+  width: 100%;
+  height: 34px !important;
+  margin-top: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 10px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.035)) !important;
+  color: rgba(255, 255, 255, 0.78) !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0.06em !important;
+  line-height: 34px !important;
+  text-align: center;
+  text-transform: uppercase;
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
+}
+
+html.fasp-modern-surfaces .tile-color-code-field:focus {
+  border-color: color-mix(in srgb, var(--fasp-accent) 58%, rgba(255, 255, 255, 0.18)) !important;
+  color: rgba(255, 255, 255, 0.94) !important;
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--fasp-accent) 14%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
 html.fasp-modern-surfaces .add-dialog-color-custom-dot,
 html.fasp-modern-surfaces .context-color-custom-dot {
   display: inline-flex !important;
@@ -371,19 +399,25 @@ html.fasp-modern-surfaces .add-tile-modal .add-dialog-bookmark-actions button {
 }
 
 html.fasp-modern-surfaces .context-menu {
-  border-color: var(--fasp-border) !important;
+  border-color: color-mix(in srgb, var(--fasp-border) 72%, rgba(255, 255, 255, 0.18)) !important;
   border-radius: 18px !important;
   background:
     linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--fasp-accent) 8%, transparent),
+      color-mix(in srgb, var(--fasp-accent-2) 6%, transparent)
+    ),
+    linear-gradient(
       180deg,
-      color-mix(in srgb, var(--fasp-surface-strong) 78%, rgba(5, 7, 16, 0.92)),
-      color-mix(in srgb, var(--fasp-surface-strong) 62%, rgba(2, 6, 23, 0.94))
+      color-mix(in srgb, var(--fasp-surface-strong) 44%, rgba(12, 13, 22, 0.985)),
+      color-mix(in srgb, var(--fasp-surface-strong) 32%, rgba(5, 7, 15, 0.985))
     ) !important;
-  backdrop-filter: blur(calc(var(--fasp-glass-blur) + 8px)) saturate(var(--fasp-glass-saturation)) brightness(0.88) !important;
-  -webkit-backdrop-filter: blur(calc(var(--fasp-glass-blur) + 8px)) saturate(var(--fasp-glass-saturation)) brightness(0.88) !important;
+  backdrop-filter: blur(calc(var(--fasp-glass-blur) + 4px)) saturate(125%) brightness(0.78) !important;
+  -webkit-backdrop-filter: blur(calc(var(--fasp-glass-blur) + 4px)) saturate(125%) brightness(0.78) !important;
   box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.48),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+    0 30px 90px rgba(0, 0, 0, 0.62),
+    0 0 0 1px rgba(255, 255, 255, 0.035),
+    inset 0 1px 0 rgba(255, 255, 255, 0.09) !important;
 }
 
 html[data-fasp-glass="off"].fasp-modern-surfaces .context-menu {
@@ -436,10 +470,40 @@ html.fasp-modern-surfaces .context-menu-item {
   font-size: 13.5px;
   font-weight: 450;
   line-height: 1.18;
+  transition:
+    background 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
 }
 
-html.fasp-modern-surfaces .context-menu-item:hover {
-  background: rgba(255, 255, 255, 0.105);
+html.fasp-modern-surfaces .context-menu-item:hover:not(:disabled),
+html.fasp-modern-surfaces .context-menu-item.context-menu-item-active:not(:disabled),
+html.fasp-modern-surfaces .context-menu-item:focus,
+html.fasp-modern-surfaces .context-menu-item:focus-visible {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--fasp-accent) 20%, rgba(34, 37, 52, 0.98)),
+      color-mix(in srgb, var(--fasp-accent-2) 10%, rgba(18, 20, 32, 0.98))
+    ) !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.09),
+    0 8px 20px rgba(0, 0, 0, 0.2) !important;
+  outline: none !important;
+}
+
+html.fasp-modern-surfaces .context-menu-item.text-red-300:hover:not(:disabled),
+html.fasp-modern-surfaces .context-menu-item.text-red-300.context-menu-item-active:not(:disabled),
+html.fasp-modern-surfaces .context-menu-item.text-red-300:focus,
+html.fasp-modern-surfaces .context-menu-item.text-red-300:focus-visible {
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, #ef4444 18%, rgba(40, 18, 28, 0.98)),
+      color-mix(in srgb, #f97316 8%, rgba(22, 14, 24, 0.98))
+    ) !important;
+  color: rgb(254, 202, 202) !important;
 }
 
 html.fasp-modern-surfaces .context-menu hr {

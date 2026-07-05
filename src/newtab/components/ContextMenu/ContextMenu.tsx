@@ -12,6 +12,12 @@ import {
   openUrlFromStartPage,
   type FirefoxContainer,
 } from '../../containers/firefoxContainers';
+import {
+  formatTileHexColor,
+  getPredominantTileColor,
+  getTileDisplayColor,
+  normalizeTileHexColor,
+} from '../../tiles/tileColor';
 
 interface ContextMenuProps {
   x: number;
@@ -249,13 +255,17 @@ function MenuItem({
   disabled?: boolean;
   danger?: boolean;
 }) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
     <button
       type="button"
       role="menuitem"
       onClick={disabled ? undefined : onClick}
+      onFocus={() => setIsFocused(true)}
+      onBlur={() => setIsFocused(false)}
       disabled={disabled}
-      className={`context-menu-item ${danger ? 'text-red-300 hover:bg-red-500/10 hover:text-red-200' : ''} ${disabled ? 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-white/60' : ''}`}
+      className={`context-menu-item ${isFocused ? 'context-menu-item-active' : ''} ${danger ? 'text-red-300 hover:bg-red-500/10 hover:text-red-200' : ''} ${disabled ? 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-white/60' : ''}`}
     >
       <Icon>{icon}</Icon>
       {children}
@@ -266,6 +276,7 @@ function MenuItem({
 export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFolder }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const iconFileRef = useRef<HTMLInputElement>(null);
   const customColorRef = useRef<HTMLInputElement>(null);
   const colorDragOffset = useRef<{ x: number; y: number } | null>(null);
   const { runtimeTheme } = useThemeStore();
@@ -284,6 +295,10 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
     unpinTile,
     updateTile,
   } = useTileStore();
+  const inheritedContextColor = useMemo(
+    () => getPredominantTileColor(tiles, parentId, colorSwatches[0]),
+    [colorSwatches, parentId, tiles]
+  );
   const [pos, setPos] = useState({ x, y });
   const [showAdd, setShowAdd] = useState(false);
   const [showFolder, setShowFolder] = useState(false);
@@ -301,7 +316,9 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
   const [img, setImg] = useState('');
-  const [color, setColor] = useState(colorSwatches[0]);
+  const [icon, setIcon] = useState('');
+  const [color, setColor] = useState(inheritedContextColor.color);
+  const [colorTouched, setColorTouched] = useState(false);
   const [folderName, setFolderName] = useState('');
   const [folderCreationMode, setFolderCreationMode] = useState<'plain' | 'move-current'>('plain');
   const [moveFolderQuery, setMoveFolderQuery] = useState('');
@@ -433,6 +450,17 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
     typeof document === 'undefined' ? content : createPortal(content, document.body)
   );
 
+  const setColorExplicit = (nextColor: string) => {
+    setColorTouched(true);
+    setColor(normalizeTileHexColor(nextColor, colorSwatches[0]));
+  };
+
+  const resetColorToInherited = (targetParentId: string | null | undefined = parentId) => {
+    const inherited = getPredominantTileColor(tiles, targetParentId, colorSwatches[0]);
+    setColorTouched(false);
+    setColor(inherited.color);
+  };
+
   const getSelectedContainerFields = () => {
     const selected = containers.find((container) => container.cookieStoreId === selectedContainerId);
     const fallbackFromTile = tile?.containerCookieStoreId === selectedContainerId ? tile : undefined;
@@ -523,7 +551,9 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
     setUrl(tile.url || '');
     setTitle(tile.title);
     setImg(tile.customImage || tile.thumbnail || '');
-    setColor(tile.dominantColor || colorSwatches[0]);
+    setIcon(tile.customIcon || '');
+    setColor(getTileDisplayColor(tile) || colorSwatches[0]);
+    setColorTouched(false);
     setSelectedContainerId(tile.containerCookieStoreId || '');
     setContainerMenuOpen(false);
     setShowEdit(true);
@@ -537,6 +567,10 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
       const normalized = normalizeUrl(url);
       const host = new URL(normalized).hostname.replace('www.', '');
       const parentFolderId = tile?.type === 'folder' ? tile.id : parentId || undefined;
+      const inheritedForParent = getPredominantTileColor(tiles, parentFolderId || null, colorSwatches[0]);
+      const normalizedColor = colorTouched ? normalizeTileHexColor(color, inheritedForParent.color) : inheritedForParent.color;
+      const hasCustomImage = Boolean(img);
+      const shouldApplyAccent = !hasCustomImage && (colorTouched || inheritedForParent.source !== 'fallback');
       const siblingCount = tiles.filter((candidate) => (
         parentFolderId ? candidate.parentId === parentFolderId : !candidate.parentId
       )).length;
@@ -546,9 +580,11 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
         type: 'tile',
         title: title.trim() || host,
         url: normalized,
-        thumbnail: img ? undefined : (getScreenshotThumbnailUrl(normalized) || undefined),
-        customImage: img || undefined,
-        dominantColor: img ? undefined : color,
+        thumbnail: hasCustomImage ? undefined : (getScreenshotThumbnailUrl(normalized) || undefined),
+        customImage: hasCustomImage ? img : undefined,
+        customIcon: icon.trim() || undefined,
+        dominantColor: hasCustomImage ? undefined : normalizedColor,
+        tileAccentColor: shouldApplyAccent ? normalizedColor : undefined,
         ...getSelectedContainerFields(),
         order: siblingCount,
         parentId: parentFolderId,
@@ -567,13 +603,17 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
     const folderId = crypto.randomUUID();
     const createdAt = Date.now();
     const destinationParentId = parentId || undefined;
+    const inheritedForParent = getPredominantTileColor(tiles, destinationParentId || null, colorSwatches[0]);
+    const normalizedColor = colorTouched ? normalizeTileHexColor(color, inheritedForParent.color) : inheritedForParent.color;
+    const shouldApplyAccent = colorTouched || inheritedForParent.source !== 'fallback';
 
     await addTile({
       id: folderId,
       type: 'folder',
       title: folderName.trim(),
       childrenIds: [],
-      dominantColor: color,
+      dominantColor: normalizedColor,
+      tileAccentColor: shouldApplyAccent ? normalizedColor : undefined,
       parentId: destinationParentId,
       order: tiles.filter((candidate) => (parentId ? candidate.parentId === parentId : !candidate.parentId)).length,
       createdAt,
@@ -599,6 +639,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
       void updateTile(tileId, {
         title: title.trim(),
         customImage: img.trim() || undefined,
+        customIcon: icon.trim() || undefined,
         thumbnail: undefined,
         dominantColor: img.trim() ? undefined : tile.dominantColor,
       });
@@ -613,6 +654,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
         title: title.trim() || fallbackTitle,
         url: normalized,
         customImage: img.trim() || undefined,
+        customIcon: icon.trim() || undefined,
         thumbnail: img.trim() ? undefined : (normalized ? (getScreenshotThumbnailUrl(normalized) || undefined) : undefined),
         dominantColor: img.trim() ? undefined : tile.dominantColor,
         ...getSelectedContainerFields(),
@@ -648,8 +690,10 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
     void updateTile(tileId, {
       customImage: undefined,
       customImageAssetId: undefined,
+      customIcon: undefined,
       thumbnail: undefined,
       dominantColor: undefined,
+      tileAccentColor: undefined,
     });
     onClose();
   };
@@ -657,8 +701,10 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
   const doColor = (event: React.FormEvent) => {
     event.preventDefault();
     if (!tileId) return;
+    const normalizedColor = normalizeTileHexColor(color, colorSwatches[0]);
     void updateTile(tileId, {
-      dominantColor: color,
+      dominantColor: normalizedColor,
+      tileAccentColor: normalizedColor,
       customImage: undefined,
       customImageAssetId: undefined,
       thumbnail: undefined,
@@ -668,9 +714,11 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
 
   const applyColor = (nextColor: string) => {
     if (!tileId) return;
-    setColor(nextColor);
+    const normalizedColor = normalizeTileHexColor(nextColor, colorSwatches[0]);
+    setColor(normalizedColor);
     void updateTile(tileId, {
-      dominantColor: nextColor,
+      dominantColor: normalizedColor,
+      tileAccentColor: normalizedColor,
       customImage: undefined,
       customImageAssetId: undefined,
       thumbnail: undefined,
@@ -683,7 +731,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
       applyColor(nextColor);
       return;
     }
-    setColor(nextColor);
+    setColorExplicit(nextColor);
   };
 
   const startColorPanelDrag = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -714,6 +762,14 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => setImg(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleIconFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setIcon(reader.result as string);
     reader.readAsDataURL(file);
   };
 
@@ -777,7 +833,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
           {renderContainerSelect('context-add-container-select')}
 
           <div className="context-color-strip" aria-label="Цвет плитки">
-            <button type="button" className="context-color-globe" onClick={() => setColor(colorSwatches[0])} aria-label="Основной цвет">
+            <button type="button" className="context-color-globe" onClick={() => setColorExplicit(colorSwatches[0])} aria-label="Основной цвет">
               <LineIcon name="globe" />
             </button>
             <div className="context-color-dots">
@@ -788,7 +844,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
                   aria-label={swatch}
                   className={`context-color-dot ${color === swatch ? 'context-color-dot-active' : ''}`}
                   style={{ background: swatch }}
-                  onClick={() => setColor(swatch)}
+                  onClick={() => setColorExplicit(swatch)}
                 />
               ))}
               <button
@@ -802,6 +858,41 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
             </div>
           </div>
           <input ref={customColorRef} type="color" value={color} onChange={handleCustomColor} className="hidden" />
+          <input
+            type="text"
+            className="tile-color-code-field"
+            value={formatTileHexColor(color, inheritedContextColor.color)}
+            readOnly
+            spellCheck={false}
+            aria-label="HEX цвет плитки"
+            data-testid="context-add-color-code"
+            onFocus={(event) => event.currentTarget.select()}
+          />
+
+          <div className="flex items-center gap-2">
+            <input
+              placeholder="URL иконки или файл"
+              value={icon}
+              data-testid="context-add-icon-input"
+              onChange={(event) => setIcon(event.target.value)}
+              className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/10 px-2 py-1.5 text-xs text-white outline-none transition-all duration-300 placeholder-white/25 focus:border-white/30 focus:bg-white/[0.14]"
+            />
+            <button
+              type="button"
+              onClick={() => iconFileRef.current?.click()}
+              className="context-file-button shrink-0 rounded-lg bg-white/10 px-2 py-1.5 text-xs text-white/55 transition-colors duration-300 hover:bg-white/20 hover:text-white/80"
+            >
+              Файл
+            </button>
+            <button
+              type="button"
+              onClick={() => setIcon('')}
+              className="context-file-button shrink-0 rounded-lg bg-white/10 px-2 py-1.5 text-xs text-white/55 transition-colors duration-300 hover:bg-white/20 hover:text-white/80"
+            >
+              Очистить
+            </button>
+            <input ref={iconFileRef} type="file" accept="image/*" className="hidden" onChange={handleIconFile} />
+          </div>
 
           <div className="context-action-row">
             <button type="button" onClick={onClose} className="context-secondary-button">
@@ -837,7 +928,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
             <button
               type="button"
               className={`context-folder-icon-choice ${color === colorSwatches[0] ? 'context-folder-icon-choice-active' : ''}`}
-              onClick={() => setColor(colorSwatches[0])}
+              onClick={() => setColorExplicit(colorSwatches[0])}
             >
               <LineIcon name="folder" />
             </button>
@@ -846,7 +937,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
                 key={swatch}
                 type="button"
                 className={`context-folder-icon-choice ${color === swatch ? 'context-folder-icon-choice-active' : ''}`}
-                onClick={() => setColor(swatch)}
+                onClick={() => setColorExplicit(swatch)}
                 aria-label={swatch}
               >
                 <span style={{ background: swatch }} />
@@ -862,6 +953,16 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
             </button>
           </div>
           <input ref={customColorRef} type="color" value={color} onChange={handleCustomColor} className="hidden" />
+          <input
+            type="text"
+            className="tile-color-code-field"
+            value={formatTileHexColor(color, inheritedContextColor.color)}
+            readOnly
+            spellCheck={false}
+            aria-label="HEX цвет папки"
+            data-testid="context-folder-color-code"
+            onFocus={(event) => event.currentTarget.select()}
+          />
 
           <div className="context-action-row">
             <button type="button" onClick={onClose} className="context-secondary-button">
@@ -917,7 +1018,41 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
           </div>
-          {(tile.customImage || tile.customImageAssetId || tile.thumbnail || tile.dominantColor) && (
+          <div className="flex items-center gap-2">
+            <input
+              placeholder="URL иконки или файл"
+              value={icon}
+              data-testid="context-edit-icon-input"
+              onChange={(event) => setIcon(event.target.value)}
+              className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/10 px-2 py-1.5 text-xs text-white outline-none transition-all duration-300 placeholder-white/25 focus:border-white/30 focus:bg-white/[0.14]"
+            />
+            <button
+              type="button"
+              onClick={() => iconFileRef.current?.click()}
+              className="context-file-button shrink-0 rounded-lg bg-white/10 px-2 py-1.5 text-xs text-white/55 transition-colors duration-300 hover:bg-white/20 hover:text-white/80"
+            >
+              Файл
+            </button>
+            <button
+              type="button"
+              onClick={() => setIcon('')}
+              className="context-file-button shrink-0 rounded-lg bg-white/10 px-2 py-1.5 text-xs text-white/55 transition-colors duration-300 hover:bg-white/20 hover:text-white/80"
+            >
+              Очистить
+            </button>
+            <input ref={iconFileRef} type="file" accept="image/*" className="hidden" onChange={handleIconFile} />
+          </div>
+          <input
+            type="text"
+            className="tile-color-code-field"
+            value={formatTileHexColor(color, colorSwatches[0])}
+            readOnly
+            spellCheck={false}
+            aria-label="HEX цвет"
+            data-testid="context-edit-color-code"
+            onFocus={(event) => event.currentTarget.select()}
+          />
+          {(tile.customImage || tile.customImageAssetId || tile.thumbnail || tile.customIcon || tile.dominantColor || tile.tileAccentColor) && (
             <button
               type="button"
               onClick={resetVisuals}
@@ -986,7 +1121,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
           </div>
-          {(tile?.customImage || tile?.customImageAssetId || tile?.thumbnail || tile?.dominantColor) && (
+          {(tile?.customImage || tile?.customImageAssetId || tile?.thumbnail || tile?.customIcon || tile?.dominantColor || tile?.tileAccentColor) && (
             <button
               type="button"
               onClick={resetVisuals}
@@ -1045,6 +1180,16 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
           </div>
         </div>
         <input ref={customColorRef} type="color" value={color} onChange={handleCustomColor} className="hidden" />
+        <input
+          type="text"
+          className="tile-color-code-field"
+          value={formatTileHexColor(color, colorSwatches[0])}
+          readOnly
+          spellCheck={false}
+          aria-label="HEX цвет"
+          data-testid="context-color-code"
+          onFocus={(event) => event.currentTarget.select()}
+        />
       </div>
     );
   }
@@ -1141,7 +1286,8 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
             Изменить изображение
           </MenuItem>
           <MenuItem icon="color" onClick={() => {
-            setColor(tile.dominantColor || colorSwatches[0]);
+            setColor(getTileDisplayColor(tile) || colorSwatches[0]);
+            setColorTouched(false);
             setColorPanelPos({
               x: Math.max(8, Math.min(x + 16, window.innerWidth - 388)),
               y: Math.max(8, Math.min(y - 8, window.innerHeight - getContextBottomGap() - 86)),
@@ -1150,7 +1296,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
           }}>
             Изменить цвет
           </MenuItem>
-          {(tile.customImage || tile.customImageAssetId || tile.thumbnail || tile.dominantColor) && (
+          {(tile.customImage || tile.customImageAssetId || tile.thumbnail || tile.customIcon || tile.dominantColor || tile.tileAccentColor) && (
             <MenuItem icon="reset" onClick={resetVisuals}>
               Вернуть стандартный вид
             </MenuItem>
@@ -1203,6 +1349,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
                     className="context-move-new-folder"
                     onClick={() => {
                       setFolderName(moveFolderQuery.trim() || '');
+                      resetColorToInherited(parentId);
                       setFolderCreationMode('move-current');
                       setShowMoveFolders(false);
                       setShowFolder(true);
@@ -1236,10 +1383,10 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
         </>
       ) : (
         <>
-          <MenuItem icon="plus" onClick={() => { setUrl(''); setTitle(''); setImg(''); setColor(colorSwatches[0]); setSelectedContainerId(''); setContainerMenuOpen(false); setShowAdd(true); }}>
+          <MenuItem icon="plus" onClick={() => { setUrl(''); setTitle(''); setImg(''); setIcon(''); resetColorToInherited(parentId); setSelectedContainerId(''); setContainerMenuOpen(false); setShowAdd(true); }}>
             Добавить сайт
           </MenuItem>
-          <MenuItem icon="folder" onClick={() => { setFolderName(''); setColor(colorSwatches[0]); setFolderCreationMode('plain'); setShowFolder(true); }}>
+          <MenuItem icon="folder" onClick={() => { setFolderName(''); resetColorToInherited(parentId); setFolderCreationMode('plain'); setShowFolder(true); }}>
             Создать папку
           </MenuItem>
         </>

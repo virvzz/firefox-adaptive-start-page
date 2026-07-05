@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProper
 import { createPortal } from 'react-dom';
 import type { Tile } from '../../../types';
 import {
-  getFaviconUrl,
+  getFaviconUrls,
   getScreenshotThumbnailFallbackUrl,
   getScreenshotThumbnailUrl,
   isLocalImageSource,
@@ -38,6 +38,28 @@ function getInitial(hostOrTitle: string): string {
   return (hostOrTitle.trim()[0] || '?').toUpperCase();
 }
 
+function getUrlHost(url: string | undefined): string {
+  if (!url) return '';
+  try {
+    return new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).hostname.replace(/^www\./i, '');
+  } catch {
+    return '';
+  }
+}
+
+function getTileInitial(tile: Pick<Tile, 'title' | 'url'> | undefined): string {
+  if (!tile) return '?';
+  return getInitial(getUrlHost(tile.url) || tile.title);
+}
+
+function isLegacyGoogleFaviconSource(src: string | undefined): boolean {
+  return Boolean(src && /(?:google\.com\/s2\/favicons|gstatic\.com\/favicon)/i.test(src));
+}
+
+function uniqueIconSources(sources: Array<string | undefined>): string[] {
+  return [...new Set(sources.filter((src): src is string => Boolean(src)))];
+}
+
 export const TileCard = memo(function TileCard({
   tile,
   childCount = 0,
@@ -51,6 +73,7 @@ export const TileCard = memo(function TileCard({
 }: TileCardProps) {
   const [previewIndex, setPreviewIndex] = useState(0);
   const [titleTooltip, setTitleTooltip] = useState<TitleTooltipPosition | null>(null);
+  const [failedIconSources, setFailedIconSources] = useState<ReadonlySet<string>>(() => new Set());
   const cardRef = useRef<HTMLDivElement>(null);
   const titleTooltipTimerRef = useRef<number | null>(null);
   const { settings } = useSettingsStore();
@@ -167,16 +190,51 @@ export const TileCard = memo(function TileCard({
   const containerBadgeColor = getContainerColor(tile.containerColor);
   const shouldUsePreview = !preferFaviconOnly && tileVisualMode !== 'favicon';
   const previewSrc = shouldUsePreview ? previewCandidates[previewIndex] : undefined;
-  const faviconSrc = (allowImageSource(tile.favicon) ? tile.favicon : '')
-    || (tile.url ? getFaviconUrl(tile.url) : '');
-  const partnerFaviconSrc = (allowImageSource(folderCreatePartner?.favicon) ? folderCreatePartner?.favicon : '')
-    || (folderCreatePartner?.url ? getFaviconUrl(folderCreatePartner.url) : '');
+  const markIconSourceFailed = useCallback((src: string) => {
+    if (!src) return;
+    setFailedIconSources((current) => {
+      if (current.has(src)) return current;
+      const next = new Set(current);
+      next.add(src);
+      return next;
+    });
+  }, []);
+
+  const handleIconLoad = useCallback((
+    event: React.SyntheticEvent<HTMLImageElement>,
+    src: string
+  ) => {
+    const image = event.currentTarget;
+    if (isLegacyGoogleFaviconSource(src) && image.naturalWidth <= 16 && image.naturalHeight <= 16) {
+      markIconSourceFailed(src);
+    }
+  }, [markIconSourceFailed]);
+  const getVisibleIconSource = useCallback(
+    (sources: string[]) => sources.find((src) => src && !failedIconSources.has(src)) || '',
+    [failedIconSources]
+  );
+  const faviconSources = useMemo(() => {
+    return uniqueIconSources([
+      tile.customIcon,
+      ...(tile.url ? getFaviconUrls(tile.url) : []),
+    ]);
+  }, [tile.customIcon, tile.url]);
+  const partnerFaviconSources = useMemo(() => {
+    return uniqueIconSources([
+      folderCreatePartner?.customIcon,
+      ...(folderCreatePartner?.url ? getFaviconUrls(folderCreatePartner.url) : []),
+    ]);
+  }, [folderCreatePartner?.customIcon, folderCreatePartner?.url]);
+  const visibleFaviconSrc = getVisibleIconSource(faviconSources);
+  const visiblePartnerFaviconSrc = getVisibleIconSource(partnerFaviconSources);
+  const tileInitial = getTileInitial(tile);
   const hasPreview = Boolean(previewSrc);
   const folderPreview = tile.type === 'folder' ? folderPreviewItems.slice(0, 4) : [];
   const folderMode = tile.type === 'folder' ? tile.bookmarkMode : undefined;
   const folderModeLabel = folderMode === 'reference' ? 'REF' : folderMode === 'clone' ? 'CLONE' : null;
-  const showFaviconBadge = hasPreview && faviconSrc && tileVisualMode === 'mixed';
+  const showFaviconBadge = hasPreview && tileVisualMode === 'mixed';
   const tileLabelMode = settings.tileLabelMode || 'compact';
+  const tileIconColor = tileAccentColor || tile.dominantColor || runtimeTheme.colors.accent;
 
   const bgStyle = !hasPreview && (tileAccentColor || tile.dominantColor)
     ? {
@@ -219,8 +277,9 @@ export const TileCard = memo(function TileCard({
         borderRadius,
         aspectRatio: '1',
         '--tile-accent-color': tileAccentColor || 'transparent',
+        '--tile-icon-color': tileIconColor,
         ...bgStyle,
-      } as CSSProperties & { '--tile-accent-color': string }}
+      } as CSSProperties & { '--tile-accent-color': string; '--tile-icon-color': string }}
       onClick={handleClick}
       onPointerEnter={scheduleTitleTooltip}
       onPointerLeave={hideTitleTooltip}
@@ -253,18 +312,21 @@ export const TileCard = memo(function TileCard({
         <div className="tile-accent-wash absolute inset-0 rounded-[inherit]" aria-hidden="true" />
       )}
 
-      {tile.type === 'folder' && !hasPreview && folderPreview.length > 0 && (
+      {tile.type === 'folder' && !hasPreview && !visibleFaviconSrc && folderPreview.length > 0 && (
         <div
           className="folder-preview-grid relative z-10"
           data-preview-count={Math.min(folderPreview.length, 4)}
         >
           {folderPreview.map((child) => {
-            const childFavicon = (allowImageSource(child.favicon) ? child.favicon : '')
-              || (child.url ? getFaviconUrl(child.url) : '');
+            const childFaviconSources = uniqueIconSources([
+              child.customIcon,
+              ...(child.url ? getFaviconUrls(child.url) : []),
+            ]);
+            const childFavicon = getVisibleIconSource(childFaviconSources);
             return (
               <span
                 key={child.id}
-                className={`folder-preview-cell ${child.type === 'folder' ? 'folder-preview-cell-folder' : ''}`}
+                className={`folder-preview-cell ${child.type === 'folder' ? 'folder-preview-cell-folder' : ''} ${childFavicon ? '' : 'folder-preview-cell-generated'}`}
                 data-child-type={child.type}
               >
                 {childFavicon ? (
@@ -274,52 +336,55 @@ export const TileCard = memo(function TileCard({
                     loading="lazy"
                     decoding="async"
                     referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).style.display = 'none';
-                    }}
+                    onLoad={(event) => handleIconLoad(event, childFavicon)}
+                    onError={() => markIconSourceFailed(childFavicon)}
                   />
-                ) : getInitial(child.title)}
+                ) : getTileInitial(child)}
               </span>
             );
           })}
         </div>
       )}
 
-      {tile.type === 'folder' && !hasPreview && folderPreview.length === 0 && (
+      {tile.type === 'folder' && !hasPreview && !visibleFaviconSrc && folderPreview.length === 0 && (
         <div className="folder-preview-empty relative z-10" aria-hidden="true" />
       )}
 
-      {tile.type !== 'folder' && !hasPreview && (
-        <div className="tile-main-icon relative z-10 mb-2 flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.07] text-lg font-semibold text-white/75">
-          {faviconSrc ? (
+      {(tile.type !== 'folder' || visibleFaviconSrc) && !hasPreview && (
+        <div className={`tile-main-icon relative z-10 mb-2 flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.07] text-lg font-semibold text-white/75 ${visibleFaviconSrc ? '' : 'tile-generated-icon'}`}>
+          {visibleFaviconSrc ? (
             <img
-              src={faviconSrc}
+              src={visibleFaviconSrc}
               alt=""
               className="h-8 w-8 object-contain"
               loading="lazy"
               decoding="async"
               referrerPolicy="no-referrer"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = 'none';
-              }}
+              onLoad={(event) => handleIconLoad(event, visibleFaviconSrc)}
+              onError={() => markIconSourceFailed(visibleFaviconSrc)}
             />
-          ) : getInitial(tile.title)}
+          ) : (
+            <span className="tile-generated-icon-letter">{tileInitial}</span>
+          )}
         </div>
       )}
 
       {showFaviconBadge && (
-        <div className="tile-favicon-badge absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center overflow-hidden rounded-lg border border-white/20 bg-black/35 backdrop-blur-md">
-          <img
-            src={faviconSrc}
-            alt=""
-            className="h-5 w-5 object-contain"
-            loading="lazy"
-            decoding="async"
-            referrerPolicy="no-referrer"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = 'none';
-            }}
-          />
+        <div className={`tile-favicon-badge absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center overflow-hidden rounded-lg border border-white/20 bg-black/35 backdrop-blur-md ${visibleFaviconSrc ? '' : 'tile-generated-icon tile-favicon-badge-generated'}`}>
+          {visibleFaviconSrc ? (
+            <img
+              src={visibleFaviconSrc}
+              alt=""
+              className="h-5 w-5 object-contain"
+              loading="lazy"
+              decoding="async"
+              referrerPolicy="no-referrer"
+              onLoad={(event) => handleIconLoad(event, visibleFaviconSrc)}
+              onError={() => markIconSourceFailed(visibleFaviconSrc)}
+            />
+          ) : (
+            <span className="tile-generated-icon-letter">{tileInitial}</span>
+          )}
         </div>
       )}
 
@@ -351,15 +416,19 @@ export const TileCard = memo(function TileCard({
           <div className="folder-create-preview-shell" aria-hidden="true">
             <div className="folder-create-preview-tab" />
             <div className="folder-create-preview-grid">
-              <span className="folder-create-preview-icon">
-                {faviconSrc ? (
-                  <img src={faviconSrc} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
-                ) : getInitial(tile.title)}
+              <span className={`folder-create-preview-icon ${visibleFaviconSrc ? '' : 'tile-generated-icon'}`}>
+                {visibleFaviconSrc ? (
+                  <img src={visibleFaviconSrc} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onLoad={(event) => handleIconLoad(event, visibleFaviconSrc)} onError={() => markIconSourceFailed(visibleFaviconSrc)} />
+                ) : (
+                  <span className="tile-generated-icon-letter">{getTileInitial(tile)}</span>
+                )}
               </span>
-              <span className="folder-create-preview-icon folder-create-preview-icon-incoming">
-                {partnerFaviconSrc ? (
-                  <img src={partnerFaviconSrc} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" />
-                ) : getInitial(folderCreatePartner?.title || tile.title)}
+              <span className={`folder-create-preview-icon folder-create-preview-icon-incoming ${visiblePartnerFaviconSrc ? '' : 'tile-generated-icon'}`}>
+                {visiblePartnerFaviconSrc ? (
+                  <img src={visiblePartnerFaviconSrc} alt="" loading="lazy" decoding="async" referrerPolicy="no-referrer" onLoad={(event) => handleIconLoad(event, visiblePartnerFaviconSrc)} onError={() => markIconSourceFailed(visiblePartnerFaviconSrc)} />
+                ) : (
+                  <span className="tile-generated-icon-letter">{getTileInitial(folderCreatePartner || tile)}</span>
+                )}
               </span>
             </div>
           </div>

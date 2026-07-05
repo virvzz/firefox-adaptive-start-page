@@ -11,6 +11,57 @@ function normalizeUrl(url: string): string | null {
   }
 }
 
+function isLikelyLocalHost(host: string): boolean {
+  const normalized = host.toLowerCase();
+  if (!normalized || normalized === 'localhost') return true;
+  if (!normalized.includes('.')) return true;
+  if (/^127\./.test(normalized) || /^10\./.test(normalized) || /^192\.168\./.test(normalized)) return true;
+  if (/^169\.254\./.test(normalized)) return true;
+  const private172 = normalized.match(/^172\.(\d{1,2})\./);
+  if (private172) {
+    const second = Number(private172[1]);
+    if (second >= 16 && second <= 31) return true;
+  }
+  return normalized.endsWith('.local') || normalized.endsWith('.lan') || normalized.endsWith('.home.arpa');
+}
+
+function isLikelyNetworkDeviceHost(host: string): boolean {
+  const normalized = host.toLowerCase();
+  return /(^|[.-])(router|gateway|netgear|tplink|fritz|keenetic|openwrt|mikrotik|asusrouter|routerlogin|dlink|tenda)([.-]|$)/.test(normalized);
+}
+
+function uniqueUrls(urls: string[]): string[] {
+  return [...new Set(urls)];
+}
+
+function getDirectFaviconUrls(parsed: URL): string[] {
+  const iconFiles = [
+    'favicon.ico',
+    'favicon.png',
+    'favicon.svg',
+    'apple-touch-icon.png',
+    'apple-touch-icon-precomposed.png',
+    'android-chrome-192x192.png',
+    'android-chrome-512x512.png',
+  ];
+  const pathParts = parsed.pathname
+    .split('/')
+    .filter(Boolean);
+  if (pathParts.length > 0 && /\.[a-z0-9]+$/i.test(pathParts[pathParts.length - 1])) {
+    pathParts.pop();
+  }
+
+  const prefixes: string[] = [];
+  for (let length = pathParts.length; length > 0; length -= 1) {
+    prefixes.push(`/${pathParts.slice(0, length).join('/')}/`);
+  }
+  prefixes.push('/');
+
+  return uniqueUrls(prefixes.flatMap((prefix) => (
+    iconFiles.map((file) => new URL(`${prefix}${file}`, parsed.origin).toString())
+  )));
+}
+
 /**
  * External favicon/screenshot services receive the tile URL in the request, so
  * they are only used after the user explicitly enables them in settings.
@@ -29,11 +80,26 @@ export function isLocalImageSource(src: string | undefined): boolean {
 }
 
 export function getFaviconUrl(url: string): string {
-  if (!externalPreviewsAllowed()) return '';
+  return getFaviconUrls(url)[0] || '';
+}
+
+export function getFaviconUrls(url: string): string[] {
+  if (!externalPreviewsAllowed()) return [];
   const normalized = normalizeUrl(url);
-  if (!normalized) return '';
-  const host = new URL(normalized).hostname;
-  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`;
+  if (!normalized) return [];
+  const parsed = new URL(normalized);
+  const host = parsed.hostname;
+  const directIconUrls = getDirectFaviconUrls(parsed);
+
+  if (isLikelyLocalHost(host) || isLikelyNetworkDeviceHost(host)) {
+    return directIconUrls;
+  }
+
+  return uniqueUrls([
+    ...directIconUrls,
+    `https://icons.duckduckgo.com/ip3/${encodeURIComponent(host)}.ico`,
+    `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`,
+  ]);
 }
 
 export function getScreenshotThumbnailUrl(url: string): string {

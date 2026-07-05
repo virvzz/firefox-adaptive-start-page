@@ -75,6 +75,7 @@ interface TilesState {
   detachBookmarkReference: (id: string) => Promise<void>;
   applyAccentColorToAllTiles: (color: string) => Promise<{ updated: number }>;
   clearAccentColorFromAllTiles: () => Promise<{ updated: number }>;
+  resetTileVisualsToDefault: () => Promise<{ updated: number }>;
   optimizeMediaAssets: () => Promise<{ optimized: number }>;
   restoreMediaAssets: () => Promise<{ restored: number }>;
   getSurfaceItems: (parentId: SurfaceParentId) => Tile[];
@@ -411,6 +412,7 @@ function createSiteItem({
   thumbnail,
   customImage,
   customImageAssetId,
+  customIcon,
 }: {
   id: string;
   title: string;
@@ -424,6 +426,7 @@ function createSiteItem({
   thumbnail?: string;
   customImage?: string;
   customImageAssetId?: string;
+  customIcon?: string;
 }): Tile {
   return {
     id,
@@ -433,6 +436,7 @@ function createSiteItem({
     thumbnail,
     customImage,
     customImageAssetId,
+    customIcon,
     source,
     bookmarkId,
     bookmarkMode,
@@ -453,6 +457,7 @@ function createFolderItem({
   pinnedAt,
   createdAt,
   updatedAt,
+  customIcon,
 }: {
   id: string;
   title: string;
@@ -463,12 +468,14 @@ function createFolderItem({
   pinnedAt?: number;
   createdAt: number;
   updatedAt: number;
+  customIcon?: string;
 }): Tile {
   return {
     id,
     type: 'folder',
     title,
     childrenIds,
+    customIcon,
     source,
     bookmarkId,
     bookmarkMode,
@@ -485,6 +492,7 @@ function legacyTileToItem(tile: Record<string, unknown>): GridItem {
   const base = {
     id: String(tile.id || crypto.randomUUID()),
     title: String(tile.title || 'Untitled'),
+    customIcon: typeof tile.customIcon === 'string' ? tile.customIcon : undefined,
     favicon: typeof tile.favicon === 'string' ? tile.favicon : undefined,
     previewImage: typeof tile.previewImage === 'string' ? tile.previewImage : undefined,
     thumbnail: typeof tile.thumbnail === 'string' ? tile.thumbnail : undefined,
@@ -1246,6 +1254,7 @@ function cloneItemSubtreeToLocal(state: AppState, itemId: GridItemId): GridItemI
       thumbnail: item.thumbnail,
       customImage: item.customImage,
       customImageAssetId: item.customImageAssetId,
+      customIcon: item.customIcon,
     });
     return nextId;
   }
@@ -1263,6 +1272,7 @@ function cloneItemSubtreeToLocal(state: AppState, itemId: GridItemId): GridItemI
     pinnedAt: item.pinnedAt,
     createdAt: now,
     updatedAt: now,
+    customIcon: item.customIcon,
   });
   state.containers[nextId] = {
     id: nextId,
@@ -1370,6 +1380,7 @@ async function addLocalItemToBookmarkReference(
       thumbnail: item.thumbnail,
       customImage: item.customImage,
       customImageAssetId: item.customImageAssetId,
+      customIcon: item.customIcon,
     });
     return nextId;
   }
@@ -1390,6 +1401,7 @@ async function addLocalItemToBookmarkReference(
     bookmarkMode: 'reference',
     createdAt: item.createdAt || now,
     updatedAt: now,
+    customIcon: item.customIcon,
   });
   state.containers[nextId] = {
     id: nextId,
@@ -1507,6 +1519,7 @@ export const useTileStore = create<TilesState>((set, get) => {
             bookmarkMode: browserBookmark ? 'reference' : tile.bookmarkMode,
             createdAt: tile.createdAt || now,
             updatedAt: now,
+            customIcon: tile.customIcon,
           })
         : createSiteItem({
             id: itemId,
@@ -1520,6 +1533,7 @@ export const useTileStore = create<TilesState>((set, get) => {
             thumbnail: tile.thumbnail,
             customImage: tile.customImage,
             customImageAssetId: tile.customImageAssetId,
+            customIcon: tile.customIcon,
           });
 
       state.items[item.id] = {
@@ -1527,6 +1541,7 @@ export const useTileStore = create<TilesState>((set, get) => {
         glassmorphism: tile.glassmorphism,
         borderRadius: tile.borderRadius,
         opacity: tile.opacity,
+        customIcon: tile.customIcon,
         dominantColor: tile.dominantColor,
         tileAccentColor: tile.tileAccentColor,
         containerCookieStoreId: tile.containerCookieStoreId,
@@ -2123,6 +2138,47 @@ export const useTileStore = create<TilesState>((set, get) => {
 
       await commitAppState(state);
       logTileDebug('store:accent-color:cleared', { updated });
+      return { updated };
+    },
+
+    resetTileVisualsToDefault: async () => {
+      const state = cloneAppState(get().appState);
+      let updated = 0;
+      const now = Date.now();
+      for (const item of Object.values(state.items)) {
+        const hadVisualOverride = Boolean(
+          item.customImage
+          || item.customImageAssetId
+          || item.previewImage
+          || item.thumbnail
+          || item.customIcon
+          || item.dominantColor
+          || item.tileAccentColor
+          || item.favicon
+          || (item as GridItem & { faviconUpdatedAt?: number }).faviconUpdatedAt
+          || item.glassmorphism !== undefined
+          || item.borderRadius !== undefined
+          || item.opacity !== undefined
+        );
+        if (!hadVisualOverride) continue;
+        delete item.customImage;
+        delete item.customImageAssetId;
+        delete item.previewImage;
+        delete item.thumbnail;
+        delete item.customIcon;
+        delete item.dominantColor;
+        delete item.tileAccentColor;
+        delete item.favicon;
+        delete (item as GridItem & { faviconUpdatedAt?: number }).faviconUpdatedAt;
+        delete item.glassmorphism;
+        delete item.borderRadius;
+        delete item.opacity;
+        item.updatedAt = now;
+        updated += 1;
+      }
+
+      await commitAppState(state);
+      logTileDebug('store:tile-visuals:reset', { updated });
       return { updated };
     },
 

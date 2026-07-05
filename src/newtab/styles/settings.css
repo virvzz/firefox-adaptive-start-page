@@ -452,6 +452,86 @@ html[data-fasp-control-contrast="on"] .settings-toggle-switch[aria-checked="true
   transform: translateY(-1px);
 }
 
+.settings-primary-action-button {
+  min-height: 42px;
+  padding-inline: 20px !important;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--fasp-on-accent) 26%, var(--fasp-accent)) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--fasp-on-accent) 18%, transparent), transparent 48%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--fasp-accent) 86%, var(--fasp-on-accent)),
+      color-mix(in srgb, var(--fasp-accent-2) 42%, var(--fasp-accent))
+    ) !important;
+  color: var(--fasp-on-accent) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--fasp-on-accent) 22%, transparent),
+    0 14px 30px color-mix(in srgb, var(--fasp-accent) 30%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--fasp-on-accent) 24%, transparent) !important;
+}
+
+.settings-secondary-action-button {
+  min-height: 42px;
+  padding-inline: 20px !important;
+  white-space: nowrap;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 8px 18px rgba(0, 0, 0, 0.12);
+}
+
+.settings-layout-button-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+}
+
+.settings-layout-button-row > button {
+  max-width: 100%;
+}
+
+.settings-layout-button-row > .settings-primary-action-button {
+  white-space: normal;
+}
+
+.settings-visual-reset-button {
+  max-width: 100%;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+@media (max-width: 560px) {
+  .settings-layout-button-row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-layout-button-row > button {
+    flex: 1 1 100%;
+    white-space: normal;
+  }
+}
+
+.settings-secondary-action-button:hover,
+.settings-secondary-action-button:focus-visible {
+  border-color: color-mix(in srgb, var(--fasp-accent) 32%, rgba(255, 255, 255, 0.18));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--fasp-accent) 12%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.075),
+    0 10px 22px rgba(0, 0, 0, 0.14);
+  outline: none;
+}
+
+.settings-primary-action-button:hover,
+.settings-primary-action-button:focus-visible {
+  border-color: color-mix(in srgb, var(--fasp-on-accent) 40%, var(--fasp-accent)) !important;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--fasp-on-accent) 24%, transparent),
+    0 18px 36px color-mix(in srgb, var(--fasp-accent) 38%, transparent),
+    inset 0 1px 0 color-mix(in srgb, var(--fasp-on-accent) 30%, transparent) !important;
+  transform: translateY(-1px);
+  outline: none;
+}
+
 .layout-preview-tile {
   --layout-preview-opacity-percent: 90%;
   position: relative;
