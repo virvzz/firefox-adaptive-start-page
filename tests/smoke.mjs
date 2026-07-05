@@ -434,6 +434,90 @@ async function smokeCustomTileIcon(page, baseUrl) {
   assert(!rendered.hasPreview, 'Custom tile icon should not render as the tile preview image');
 }
 
+async function smokeFaviconCache(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  const cacheSegment = `favicon-cache-${Date.now()}`;
+  const tileUrl = `${baseUrl}/${cacheSegment}/index.html`;
+  const faviconRoute = `**/${cacheSegment}/*`;
+  const pngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAGklEQVR42mP8z8Dwn4GBgYERJjDgAABQYQICZ6eL8QAAAABJRU5ErkJggg==';
+  let faviconRequests = 0;
+
+  await page.route(faviconRoute, async (route) => {
+    faviconRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      body: Buffer.from(pngBase64, 'base64'),
+    });
+  });
+
+  await page.evaluate(async (tileUrl) => {
+    const now = Date.now();
+    await window.browser.storage.local.set({
+      'fasp-settings': {
+        externalPreviewsEnabled: true,
+        tileVisualMode: 'favicon',
+      },
+      'fasp.grid-state': {
+        schemaVersion: 3,
+        state: {
+          items: {
+            'favicon-cache-smoke': {
+              id: 'favicon-cache-smoke',
+              type: 'tile',
+              title: 'Cached Favicon',
+              url: tileUrl,
+              createdAt: now,
+              updatedAt: now,
+              order: 0,
+            },
+          },
+          containers: {
+            root: {
+              id: 'root',
+              title: 'Root',
+              childrenIds: ['favicon-cache-smoke'],
+              createdAt: now,
+              updatedAt: now,
+            },
+          },
+          rootContainerId: 'root',
+          currentContainerId: 'root',
+          containerStack: ['root'],
+          dragState: null,
+        },
+      },
+    });
+  }, tileUrl);
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="tile-card"][data-tile-title="Cached Favicon"] .tile-main-icon img').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => {
+    const storage = JSON.parse(localStorage.getItem('__fasp_mock_storage__') || '{}');
+    const favicon = storage['fasp.grid-state']?.state?.items?.['favicon-cache-smoke']?.favicon;
+    return typeof favicon === 'string' && favicon.startsWith('data:image/png');
+  });
+  assert(faviconRequests >= 1, 'Favicon cache smoke should load the remote favicon once before caching');
+
+  await page.unroute(faviconRoute);
+  faviconRequests = 0;
+  await page.route(faviconRoute, async (route) => {
+    faviconRequests += 1;
+    await route.abort();
+  });
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="tile-card"][data-tile-title="Cached Favicon"] .tile-main-icon img').waitFor({ state: 'visible' });
+  const rendered = await page.evaluate(() => {
+    const card = document.querySelector('[data-testid="tile-card"][data-tile-title="Cached Favicon"]');
+    return card?.querySelector('.tile-main-icon img')?.getAttribute('src') || '';
+  });
+  assert(rendered.startsWith('data:image/png'), 'Cached favicon should render from local data on the next load');
+  await page.waitForTimeout(150);
+  assert(faviconRequests === 0, 'Cached favicon should avoid a new network request on the next load');
+  await page.unroute(faviconRoute);
+}
+
 async function addBookmarkFolder(page, expectedMode) {
   await page.locator('[data-testid="add-tile-button"]').first().click();
   await page.locator('[data-testid="add-tile-modal"]').waitFor({ state: 'visible' });
@@ -1339,6 +1423,7 @@ async function main() {
 
     await smokeDnd(page, baseUrl);
     await smokeCustomTileIcon(page, baseUrl);
+    await smokeFaviconCache(page, baseUrl);
     await smokeReferenceClone(page, baseUrl);
     await smokeThemeEngine(page, baseUrl);
     await smokeLayoutSettings(page, baseUrl);
@@ -1353,7 +1438,7 @@ async function main() {
     await smokeProfileTransfer(page, baseUrl);
 
     assert(failures.length === 0, `Browser errors during smoke run:\n${failures.join('\n')}`);
-    console.log('Smoke tests passed: Manifest Permissions, DnD, Custom Tile Icon, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Context Menu Readability, Tile Containers/Open Target, Bulk Tile Accent, Tile Visual Reset, Adaptive Control Contrast, Startup Background Hydration, Profile Transfer');
+    console.log('Smoke tests passed: Manifest Permissions, DnD, Custom Tile Icon, Favicon Cache, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Context Menu Readability, Tile Containers/Open Target, Bulk Tile Accent, Tile Visual Reset, Adaptive Control Contrast, Startup Background Hydration, Profile Transfer');
   } finally {
     if (browser) await browser.close();
     await stopPreview(preview);
