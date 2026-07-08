@@ -266,13 +266,16 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
   const lastTimeRef = useRef<number>(0);
   const imageDataRef = useRef<{ width: number; height: number; imageData: ImageData } | null>(null);
   const [webglFailed, setWebglFailed] = useState(false);
-  const themeStaticAssetId = runtimeTheme.background.style === 'static'
+  const effectiveThemeBackgroundStyle = config.overrideThemeBackground
+    ? 'current'
+    : runtimeTheme.background.style;
+  const themeStaticAssetId = effectiveThemeBackgroundStyle === 'static'
     ? runtimeTheme.background.staticImageAssetId
     : undefined;
   const [themeStaticImageUrl, setThemeStaticImageUrl] = useState<string | undefined>(
     () => themeStaticAssetId ? themeStaticImageUrlCache.get(themeStaticAssetId) : undefined
   );
-  const activeStaticImageUrl = runtimeTheme.background.style === 'static'
+  const activeStaticImageUrl = effectiveThemeBackgroundStyle === 'static'
     ? themeStaticImageUrl
     : config.mode === 'static'
       ? config.staticImage
@@ -283,11 +286,11 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
       : undefined
   );
   const staticImageDecoded = Boolean(activeStaticImageUrl && decodedStaticImageUrl === activeStaticImageUrl);
-  const renderedKind = runtimeTheme.background.style === 'gradient' && runtimeTheme.background.gradient
+  const renderedKind = effectiveThemeBackgroundStyle === 'gradient' && runtimeTheme.background.gradient
     ? 'theme-gradient'
-    : runtimeTheme.background.style === 'static' && themeStaticImageUrl && staticImageDecoded
+    : effectiveThemeBackgroundStyle === 'static' && themeStaticImageUrl && staticImageDecoded
       ? 'theme-static'
-    : runtimeTheme.background.style === 'static'
+    : effectiveThemeBackgroundStyle === 'static'
       ? 'theme-static-pending'
       : config.mode === 'static' && config.staticImage && staticImageDecoded
         ? 'config-static'
@@ -331,6 +334,8 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
     logStartupDebug('background:component:mounted', {
       themeId: runtimeTheme.id,
       themeBackgroundStyle: runtimeTheme.background.style,
+      effectiveThemeBackgroundStyle,
+      overrideThemeBackground: config.overrideThemeBackground,
       themeStaticAssetId: themeStaticAssetId || null,
       configMode: config.mode,
       configStatic: Boolean(config.staticImage),
@@ -345,7 +350,9 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
     if (!themeStaticAssetId) {
       logStartupDebug('background:theme-static-effect:clear', {
         themeId: runtimeTheme.id,
-        style: runtimeTheme.background.style,
+        style: effectiveThemeBackgroundStyle,
+        themeStyle: runtimeTheme.background.style,
+        overrideThemeBackground: config.overrideThemeBackground,
       });
       setThemeStaticImageUrl(undefined);
       return undefined;
@@ -391,7 +398,7 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
         assetId: themeStaticAssetId,
       });
     };
-  }, [runtimeTheme.background.style, runtimeTheme.id, themeStaticAssetId]);
+  }, [config.overrideThemeBackground, effectiveThemeBackgroundStyle, runtimeTheme.background.style, runtimeTheme.id, themeStaticAssetId]);
 
   const getImageDataBuffer = useCallback((ctx: CanvasRenderingContext2D, w: number, h: number) => {
     const cached = imageDataRef.current;
@@ -720,10 +727,10 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
   }, [getImageDataBuffer, palette]);
 
   useLayoutEffect(() => {
-    const themeStaticVisual = runtimeTheme.background.style === 'gradient'
-      || (runtimeTheme.background.style === 'static' && runtimeTheme.background.staticImageAssetId);
+    const themeStaticVisual = effectiveThemeBackgroundStyle === 'gradient'
+      || (effectiveThemeBackgroundStyle === 'static' && runtimeTheme.background.staticImageAssetId);
     if (themeStaticVisual) return;
-    if (runtimeTheme.background.style !== 'generative' && config.mode === 'static' && config.staticImage) return;
+    if (effectiveThemeBackgroundStyle !== 'generative' && config.mode === 'static' && config.staticImage) return;
 
     const canvas = canvasRef.current;
     if (!canvas) {
@@ -732,7 +739,7 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
     }
 
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const activeGenerativeType = runtimeTheme.background.style === 'generative'
+    const activeGenerativeType = effectiveThemeBackgroundStyle === 'generative'
       ? (runtimeTheme.background.generatedType || 'particles')
       : config.generativeType;
     const resolvedType = activeGenerativeType || 'perlin';
@@ -768,6 +775,8 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
     logStartupDebug('background:canvas-effect:start', {
       themeId: runtimeTheme.id,
       themeBackgroundStyle: runtimeTheme.background.style,
+      effectiveThemeBackgroundStyle,
+      overrideThemeBackground: config.overrideThemeBackground,
       activeGenerativeType,
       pixelBackground,
       renderer: webglHandle ? 'webgl' : 'canvas2d',
@@ -871,11 +880,11 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
       webglHandle?.dispose();
       logStartupDebug('background:canvas-effect:cleanup');
     };
-  }, [config.mode, config.staticImage, config.generativeType, config.animationEnabled, config.fpsLimit, runtimeTheme.background.generatedType, runtimeTheme.background.staticImageAssetId, runtimeTheme.background.style, runtimeTheme.id, palette, webglFailed, drawPerlinNoise, drawParticles, drawFractalFlow, drawAurora, drawPlasmaWaves, drawJuliaSet, drawAutomata, drawReactionDiffusion, notifyReady]);
+  }, [config.mode, config.staticImage, config.generativeType, config.overrideThemeBackground, config.animationEnabled, config.fpsLimit, effectiveThemeBackgroundStyle, runtimeTheme.background.generatedType, runtimeTheme.background.staticImageAssetId, runtimeTheme.background.style, runtimeTheme.id, palette, webglFailed, drawPerlinNoise, drawParticles, drawFractalFlow, drawAurora, drawPlasmaWaves, drawJuliaSet, drawAutomata, drawReactionDiffusion, notifyReady]);
 
   const filterStyle = `blur(${config.blur}px) brightness(${config.brightness})`;
 
-  if (runtimeTheme.background.style === 'gradient' && runtimeTheme.background.gradient) {
+  if (effectiveThemeBackgroundStyle === 'gradient' && runtimeTheme.background.gradient) {
     return (
       <div
         data-testid="background-layer"
@@ -890,7 +899,7 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
     );
   }
 
-  if (runtimeTheme.background.style === 'static' && themeStaticImageUrl && staticImageDecoded) {
+  if (effectiveThemeBackgroundStyle === 'static' && themeStaticImageUrl && staticImageDecoded) {
     return (
       <div
         data-testid="background-layer"
@@ -905,7 +914,7 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
     );
   }
 
-  if (runtimeTheme.background.style === 'static') {
+  if (effectiveThemeBackgroundStyle === 'static') {
     return (
       <div
         data-testid="background-layer"
@@ -950,7 +959,7 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
     );
   }
 
-  const generativeTypeForRender = runtimeTheme.background.style === 'generative'
+  const generativeTypeForRender = effectiveThemeBackgroundStyle === 'generative'
     ? (runtimeTheme.background.generatedType || 'particles')
     : config.generativeType;
   // A canvas element permanently binds to its first context type, so the
@@ -966,6 +975,7 @@ export function BackgroundLayer({ onReady }: BackgroundLayerProps = {}) {
       data-testid="background-layer"
       data-background-kind="generative"
       data-background-renderer={canvasRendererKey}
+      data-background-generation={generativeTypeForRender || 'perlin'}
       className="fasp-background-layer fixed inset-0 w-full h-full z-0"
       style={{ filter: filterStyle }}
     />
