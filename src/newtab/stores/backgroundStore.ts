@@ -34,7 +34,6 @@ let staticImageObjectUrl: string | undefined;
 export const DEFAULT_BACKGROUND_CONFIG: BackgroundConfig = {
   mode: 'generative',
   generativeType: 'perlin',
-  overrideThemeBackground: false,
   animationEnabled: true,
   fpsLimit: 30,
   blur: 0,
@@ -47,20 +46,10 @@ function stripStaticImage(config: BackgroundConfig): BackgroundConfig {
   return next;
 }
 
-function inferThemeBackgroundOverride(config: Partial<BackgroundConfig> | null | undefined): boolean {
-  if (!config) return false;
-  if (typeof config.overrideThemeBackground === 'boolean') return config.overrideThemeBackground;
-  if (config.mode === 'static' || config.staticImage || config.staticImageAssetId) return true;
-  return config.mode === 'generative'
-    && Boolean(config.generativeType)
-    && config.generativeType !== DEFAULT_BACKGROUND_CONFIG.generativeType;
-}
-
 export function normalizeBackgroundConfig(config: Partial<BackgroundConfig> | null | undefined): BackgroundConfig {
   return {
     ...DEFAULT_BACKGROUND_CONFIG,
     ...(config || {}),
-    overrideThemeBackground: inferThemeBackgroundOverride(config),
     fpsLimit: Math.max(1, Math.min(60, Number(config?.fpsLimit ?? DEFAULT_BACKGROUND_CONFIG.fpsLimit))),
     blur: Math.max(0, Math.min(20, Number(config?.blur ?? DEFAULT_BACKGROUND_CONFIG.blur))),
     brightness: Math.max(0.1, Math.min(3, Number(config?.brightness ?? DEFAULT_BACKGROUND_CONFIG.brightness))),
@@ -161,7 +150,6 @@ async function loadConfig(): Promise<BackgroundConfig> {
     hasStoredConfig: Boolean(storedConfig),
     mode: config.mode,
     generativeType: config.generativeType || null,
-    overrideThemeBackground: config.overrideThemeBackground,
     staticImageAssetId: config.staticImageAssetId || null,
     hasLegacyStaticImage: Boolean(storedConfig?.staticImage),
     blur: config.blur,
@@ -195,7 +183,6 @@ async function loadConfig(): Promise<BackgroundConfig> {
   logStartupDebug('background:config:ready', {
     mode: result.mode,
     generativeType: result.generativeType || null,
-    overrideThemeBackground: result.overrideThemeBackground,
     staticImageAssetId: result.staticImageAssetId || null,
     hasStaticImageUrl: Boolean(result.staticImage),
     blur: result.blur,
@@ -219,13 +206,13 @@ export const useBackgroundStore = create<BackgroundState>((set, get) => ({
   },
 
   setMode: async (mode) => {
-    const newConfig = { ...get().config, mode, overrideThemeBackground: true };
+    const newConfig = { ...get().config, mode };
     set({ config: newConfig });
     await saveConfig(newConfig);
   },
 
   setGenerativeType: async (type) => {
-    const newConfig = { ...get().config, generativeType: type, overrideThemeBackground: true };
+    const newConfig = { ...get().config, generativeType: type };
     set({ config: newConfig });
     await saveConfig(newConfig);
   },
@@ -250,7 +237,7 @@ export const useBackgroundStore = create<BackgroundState>((set, get) => ({
       if (previousAssetId && previousAssetId !== staticImageAssetId) {
         await deleteMediaAsset(previousAssetId);
       }
-      const newConfig = { ...get().config, staticImage, staticImageAssetId, overrideThemeBackground: true };
+      const newConfig = { ...get().config, staticImage, staticImageAssetId };
       set({ config: newConfig });
       await saveConfig(newConfig);
       return;
@@ -258,7 +245,6 @@ export const useBackgroundStore = create<BackgroundState>((set, get) => ({
 
     await deleteStaticImageAsset(previousAssetId);
     const newConfig = stripStaticImage(get().config);
-    newConfig.overrideThemeBackground = true;
     delete newConfig.staticImageAssetId;
     set({ config: newConfig });
     await saveConfig(newConfig);

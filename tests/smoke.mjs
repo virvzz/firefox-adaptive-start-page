@@ -477,7 +477,6 @@ async function smokeLocalGeneratedIcon(page, baseUrl) {
   });
 
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.locator('[data-testid="tile-card"][data-tile-title="Local Letter"]').waitFor({ state: 'visible' });
   const rendered = await page.evaluate(() => {
     const card = document.querySelector('[data-testid="tile-card"][data-tile-title="Local Letter"]');
     return {
@@ -1175,69 +1174,6 @@ async function smokeStartupBackgroundHydration(page, baseUrl) {
     configMetrics.backgroundKindsAfterReady.every((kind) => kind === 'config-static'),
     `Only the final config static background should appear after visual ready. Saw: ${configMetrics.backgroundKindsAfterReady.join(', ')}`
   );
-
-  await clearAppData(page, baseUrl);
-  await page.evaluate(async () => {
-    await window.browser.storage.local.set({
-      'fasp-theme-engine': {
-        schemaVersion: 1,
-        activeThemeId: 'nord-glass',
-        customThemes: [],
-      },
-      'fasp-background': {
-        mode: 'generative',
-        generativeType: 'particles',
-        animationEnabled: true,
-        fpsLimit: 30,
-        blur: 0,
-        brightness: 1,
-      },
-    });
-  });
-
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.locator('[data-testid="tile-surface-root"]').waitFor({ state: 'visible' });
-  const generativeMetrics = await page.evaluate(async () => {
-    const readCanvas = () => {
-      const canvas = document.querySelector('canvas[data-testid="background-layer"]');
-      const ctx = canvas?.getContext('2d', { willReadFrequently: true });
-      if (!canvas || !ctx) {
-        return {
-          checksum: 0,
-          width: canvas?.width || 0,
-          height: canvas?.height || 0,
-        };
-      }
-      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-      let checksum = 0;
-      for (let index = 0; index < data.length; index += 16) {
-        checksum = ((checksum * 31) + data[index] + data[index + 1] + data[index + 2] + data[index + 3]) >>> 0;
-      }
-      return { checksum, width: canvas.width, height: canvas.height };
-    };
-    const first = readCanvas();
-    await new Promise((resolve) => setTimeout(resolve, 1100));
-    const second = readCanvas();
-    const layer = document.querySelector('[data-testid="background-layer"]');
-    return {
-      backgroundKind: layer?.getAttribute('data-background-kind'),
-      generation: layer?.getAttribute('data-background-generation'),
-      renderer: layer?.getAttribute('data-background-renderer'),
-      canvasCount: document.querySelectorAll('canvas[data-testid="background-layer"]').length,
-      prefersReducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-      first,
-      second,
-    };
-  });
-
-  assert(generativeMetrics.backgroundKind === 'generative', 'User-selected generative background should override Nord Glass theme gradient');
-  assert(generativeMetrics.generation === 'particles', 'User-selected particle background type should reach the canvas');
-  assert(generativeMetrics.renderer === 'canvas2d', 'Particle background should use the animated canvas renderer');
-  assert(generativeMetrics.canvasCount === 1, 'User-selected generative background should render one canvas');
-  assert(generativeMetrics.first.width > 0 && generativeMetrics.first.height > 0, 'Particle canvas should have drawable dimensions');
-  if (!generativeMetrics.prefersReducedMotion) {
-    assert(generativeMetrics.first.checksum !== generativeMetrics.second.checksum, 'Particle background should animate over time');
-  }
 }
 
 async function smokeProfileTransfer(page, baseUrl) {

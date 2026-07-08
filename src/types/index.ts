@@ -136,7 +136,6 @@ export interface LayoutConfig {
 export interface BackgroundConfig {
   mode: 'generative' | 'static' | 'wallpaper';
   generativeType?: 'perlin' | 'particles' | 'fractal-flow' | 'aurora' | 'plasma' | 'julia' | 'automata' | 'reaction-diffusion';
-  overrideThemeBackground: boolean;
   animationEnabled: boolean;
   fpsLimit: number;
   staticImage?: string;      // runtime url / legacy base64 url
