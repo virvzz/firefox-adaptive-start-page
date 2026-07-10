@@ -260,6 +260,9 @@ const browserMockScript = () => {
     },
     runtime: {
       onMessage: { addListener() {}, removeListener() {} },
+      getManifest() {
+        return { version: window.__faspMockManifestVersion || '0.0.0' };
+      },
       async sendMessage(message) {
         if (message?.type === 'get-bookmarks') return clone(bookmarkTree);
         return null;
@@ -1102,6 +1105,22 @@ async function smokeOptionalDataConsent(page, baseUrl) {
   assert(consentState.settings.showWeather === true, 'Weather should be enabled after consent is granted');
 }
 
+async function smokeAboutVersion(page, baseUrl) {
+  const manifest = JSON.parse(readFileSync(join(rootDir, 'dist', 'manifest.json'), 'utf8'));
+  await clearAppData(page, baseUrl);
+  await page.evaluate((version) => {
+    window.__faspMockManifestVersion = version;
+  }, manifest.version);
+  await page.locator('[data-testid="settings-button"]').click();
+  await page.locator('[data-testid="settings-modal"]').waitFor({ state: 'visible' });
+  await page.locator('[data-testid="settings-section-about"]').click();
+  const aboutVersion = page.locator('[data-testid="about-version"]');
+  await aboutVersion.waitFor({ state: 'visible' });
+  const text = (await aboutVersion.textContent()) || '';
+  assert(text.includes(manifest.version), 'About section should show the current manifest version');
+  assert(!text.includes('0.1.7'), 'About section should not show the old hardcoded version');
+}
+
 async function smokeTileContainersAndOpenTarget(page, baseUrl) {
   await clearAppData(page, baseUrl);
   await page.locator('[data-testid="add-tile-button"]').first().click();
@@ -1829,6 +1848,7 @@ async function main() {
     await smokeContextMenuReadability(page, baseUrl);
     await smokeKeyboardTileControls(page, baseUrl);
     await smokeOptionalDataConsent(page, baseUrl);
+    await smokeAboutVersion(page, baseUrl);
     await smokeTileContainersAndOpenTarget(page, baseUrl);
     await smokeFixedWidgetsAndWeatherCard(page, baseUrl);
     await smokeBulkTileAccent(page, baseUrl);
@@ -1838,7 +1858,7 @@ async function main() {
     await smokeProfileTransfer(page, baseUrl);
 
     assert(failures.length === 0, `Browser errors during smoke run:\n${failures.join('\n')}`);
-    console.log('Smoke tests passed: Manifest Permissions, DnD, Custom Tile Icon, Local Generated Icon, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Context Menu Readability, Keyboard Tile Controls, Optional Data Consent, Tile Containers/Open Target, Fixed Widgets/Weather Card, Bulk Tile Accent, Tile Visual Reset, Adaptive Control Contrast, Startup Background Hydration, Profile Transfer');
+    console.log('Smoke tests passed: Manifest Permissions, DnD, Custom Tile Icon, Local Generated Icon, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Context Menu Readability, Keyboard Tile Controls, Optional Data Consent, About Version, Tile Containers/Open Target, Fixed Widgets/Weather Card, Bulk Tile Accent, Tile Visual Reset, Adaptive Control Contrast, Startup Background Hydration, Profile Transfer');
   } finally {
     if (browser) await browser.close();
     await stopPreview(preview);

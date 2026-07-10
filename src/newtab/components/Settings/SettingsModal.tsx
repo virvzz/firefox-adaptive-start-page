@@ -62,6 +62,15 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
   const [tileBulkColor, setTileBulkColor] = useState('#8b5cf6');
   const [tileBulkColorStatus, setTileBulkColorStatus] = useState<string | null>(null);
   const [tileVisualResetStatus, setTileVisualResetStatus] = useState<string | null>(null);
+  const appVersion = useMemo(() => {
+    try {
+      return typeof browser !== 'undefined' && browser.runtime?.getManifest
+        ? browser.runtime.getManifest().version || 'development'
+        : 'development';
+    } catch {
+      return 'development';
+    }
+  }, []);
 
   const { config: layout, setColumns, setFolderColumns, setSpacing } = useLayoutStore();
   const {
@@ -1702,7 +1711,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-white">Adaptive Start Page</h3>
-                  <p className="text-sm text-white/40">Версия 0.1.7</p>
+                  <p className="text-sm text-white/40" data-testid="about-version">Версия {appVersion}</p>
                 </div>
               </div>
               <p className="text-sm text-white/50 leading-relaxed">
