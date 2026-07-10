@@ -477,6 +477,7 @@ async function smokeLocalGeneratedIcon(page, baseUrl) {
   });
 
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="tile-card"][data-tile-title="Local Letter"]').waitFor({ state: 'visible' });
   const rendered = await page.evaluate(() => {
     const card = document.querySelector('[data-testid="tile-card"][data-tile-title="Local Letter"]');
     return {
@@ -809,6 +810,203 @@ async function smokeContextMenuReadability(page, baseUrl) {
   assert(metrics.activeColor !== 'rgba(255, 255, 255, 0.78)', 'Focused context menu item should increase text contrast');
 }
 
+async function smokeKeyboardTileControls(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await page.evaluate(async () => {
+    const now = Date.now();
+    await window.browser.storage.local.set({
+      'fasp-settings': {
+        showSearchBar: true,
+        showClock: false,
+        showWeather: false,
+        searchBarWidth: 60,
+        searchResultLimit: 50,
+        externalPreviewsEnabled: true,
+        tileVisualMode: 'favicon',
+      },
+      'fasp.grid-state': {
+        schemaVersion: 3,
+        state: {
+          items: {
+            'keyboard-folder': {
+              id: 'keyboard-folder',
+              type: 'folder',
+              title: 'Keyboard Folder',
+              childrenIds: ['keyboard-child'],
+              source: 'manual',
+              createdAt: now,
+              updatedAt: now,
+              order: 0,
+            },
+            'keyboard-preview': {
+              id: 'keyboard-preview',
+              type: 'tile',
+              title: 'Keyboard Preview',
+              url: 'https://preview.example',
+              thumbnail: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAGklEQVR42mP8z8Dwn4GBgYERJjDgAABQYQICZ6eL8QAAAABJRU5ErkJggg==',
+              source: 'manual',
+              createdAt: now,
+              updatedAt: now,
+              order: 1,
+            },
+            'keyboard-delete': {
+              id: 'keyboard-delete',
+              type: 'tile',
+              title: 'Keyboard Delete',
+              url: 'https://delete.example',
+              source: 'manual',
+              createdAt: now,
+              updatedAt: now,
+              order: 2,
+            },
+            'keyboard-child': {
+              id: 'keyboard-child',
+              type: 'tile',
+              title: 'Keyboard Child',
+              url: 'https://child.example',
+              source: 'manual',
+              parentId: 'keyboard-folder',
+              createdAt: now,
+              updatedAt: now,
+              order: 0,
+            },
+          },
+          containers: {
+            root: {
+              id: 'root',
+              title: 'Root',
+              childrenIds: ['keyboard-folder', 'keyboard-preview', 'keyboard-delete'],
+              createdAt: now,
+              updatedAt: now,
+            },
+            'keyboard-folder': {
+              id: 'keyboard-folder',
+              title: 'Keyboard Folder',
+              parentId: 'root',
+              childrenIds: ['keyboard-child'],
+              createdAt: now,
+              updatedAt: now,
+            },
+          },
+          rootContainerId: 'root',
+          currentContainerId: 'root',
+          containerStack: ['root'],
+          dragState: null,
+        },
+      },
+    });
+  });
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="tile-surface-root"]').waitFor({ state: 'visible' });
+
+  await page.locator('.sortable-tile[data-tile-id="keyboard-folder"]').focus();
+  await page.keyboard.press('Enter');
+  await page.locator('[data-testid="tile-surface-folder"][data-parent-id="keyboard-folder"]').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => (
+    document.activeElement?.classList.contains('sortable-tile')
+    && document.activeElement?.dataset.tileId === 'keyboard-child'
+  ));
+
+  await page.keyboard.press('Escape');
+  await page.locator('[data-testid="tile-surface-folder"][data-parent-id="keyboard-folder"]').waitFor({ state: 'detached' });
+
+  await page.evaluate(() => { window.__faspOpenedUrls = []; });
+  await page.locator('.sortable-tile[data-tile-id="keyboard-preview"]').focus();
+  await expectCount(page.locator('.sortable-tile[data-tile-id="keyboard-preview"] .tile-card-with-preview'), 0, 'Favicon mode should not show page thumbnails before Space preview');
+  await page.keyboard.press('Space');
+  await page.locator('[data-testid="tile-keyboard-preview-overlay"]').waitFor({ state: 'visible' });
+  const openedAfterSpace = await page.evaluate(() => window.__faspOpenedUrls.length);
+  assert(openedAfterSpace === 0, 'Space should preview a focused tile without opening its URL');
+  await page.waitForTimeout(520);
+
+  const focusStyle = await page.evaluate(() => {
+    const tile = document.querySelector('.sortable-tile[data-tile-id="keyboard-preview"]');
+    const card = tile?.querySelector('[data-testid="tile-card"]');
+    const overlay = document.querySelector('[data-testid="tile-keyboard-preview-overlay"]');
+    const overlayCard = overlay?.querySelector('[data-testid="tile-card"]');
+    const preview = overlayCard?.querySelector('.tile-preview');
+    const overlayRect = overlay?.getBoundingClientRect();
+    const tileStyle = tile ? getComputedStyle(tile) : null;
+    const cardStyle = card ? getComputedStyle(card) : null;
+    const viewportSide = Math.min(window.innerWidth, window.innerHeight);
+    return {
+      keyboardPreviewActive: tile?.classList.contains('keyboard-preview-active') || false,
+      sourceCardHasPreview: card?.classList.contains('tile-card-with-preview') || false,
+      overlayCardHasPreview: overlayCard?.classList.contains('tile-card-with-preview') || false,
+      previewSrc: preview?.getAttribute('src') || '',
+      overlayCenterX: overlayRect ? overlayRect.left + overlayRect.width / 2 : 0,
+      overlayCenterY: overlayRect ? overlayRect.top + overlayRect.height / 2 : 0,
+      viewportCenterX: window.innerWidth / 2,
+      viewportCenterY: window.innerHeight / 2,
+      overlayWidth: overlayRect?.width || 0,
+      viewportSide,
+      outlineWidth: tileStyle?.outlineWidth || '',
+      outlineStyle: tileStyle?.outlineStyle || '',
+      boxShadow: tileStyle?.boxShadow || '',
+      cardBorder: cardStyle?.borderTopColor || '',
+      cardTransform: cardStyle?.transform || '',
+    };
+  });
+  assert(focusStyle.keyboardPreviewActive, 'Space should mark the focused tile as keyboard preview active');
+  assert(!focusStyle.sourceCardHasPreview, 'Space preview should not permanently change the source tile visual mode');
+  assert(focusStyle.overlayCardHasPreview, 'Space preview should force a page thumbnail on the animated overlay');
+  assert(focusStyle.previewSrc.startsWith('data:image/'), 'Space preview should render the focused tile page thumbnail');
+  assert(Math.abs(focusStyle.overlayCenterX - focusStyle.viewportCenterX) <= 3, 'Space preview should animate to the horizontal center of the viewport');
+  assert(Math.abs(focusStyle.overlayCenterY - focusStyle.viewportCenterY) <= 3, 'Space preview should animate to the vertical center of the viewport');
+  assert(focusStyle.overlayWidth >= focusStyle.viewportSide * 0.45, 'Space preview should grow to roughly a quarter-screen tile');
+  assert(parseFloat(focusStyle.outlineWidth) >= 3, 'Focused tile should use a strong keyboard outline');
+  assert(focusStyle.outlineStyle !== 'none', 'Focused tile outline should be visible');
+  assert(focusStyle.boxShadow !== 'none', 'Focused tile should have a visible focus glow');
+  assert(focusStyle.cardBorder !== 'rgba(0, 0, 0, 0)', 'Focused tile card should reinforce the focus border');
+  assert(focusStyle.cardTransform !== 'none', 'Focused tile should scale like hover while keyboard-focused');
+
+  await page.keyboard.press('Space');
+  await page.locator('[data-testid="tile-keyboard-preview-overlay"]').waitFor({ state: 'detached' });
+  assert(
+    await page.evaluate(() => !document.querySelector('.sortable-tile[data-tile-id="keyboard-preview"]')?.classList.contains('keyboard-preview-active')),
+    'Second Space should close the keyboard preview marker'
+  );
+  await expectCount(page.locator('.sortable-tile[data-tile-id="keyboard-preview"] .tile-card-with-preview'), 0, 'Second Space should return the tile to the configured favicon mode');
+
+  await page.keyboard.press('Space');
+  await page.locator('[data-testid="tile-keyboard-preview-overlay"]').waitFor({ state: 'visible' });
+  await page.waitForTimeout(520);
+  await page.keyboard.press('Escape');
+  await page.locator('[data-testid="tile-keyboard-preview-overlay"]').waitFor({ state: 'detached' });
+  assert(
+    await page.evaluate(() => !document.querySelector('.sortable-tile[data-tile-id="keyboard-preview"]')?.classList.contains('keyboard-preview-active')),
+    'Escape should clear the source tile preview marker'
+  );
+  await expectCount(page.locator('.sortable-tile[data-tile-id="keyboard-preview"] .tile-card-with-preview'), 0, 'Escape should return the tile to the configured favicon mode');
+
+  await page.locator('.sortable-tile[data-tile-id="keyboard-delete"]').focus();
+  await page.keyboard.press('Delete');
+  await page.locator('[data-testid="context-delete-confirm"]').waitFor({ state: 'visible' });
+  const stillStoredBeforeConfirm = await page.evaluate(async () => {
+    const result = await window.browser.storage.local.get('fasp.grid-state');
+    const items = result['fasp.grid-state']?.state?.items || {};
+    return Boolean(items['keyboard-delete']);
+  });
+  assert(stillStoredBeforeConfirm, 'Delete should ask for confirmation before removing the focused tile');
+  await page.locator('[data-testid="context-delete-accept"]').click();
+  await page.waitForFunction(async () => {
+    const result = await window.browser.storage.local.get('fasp.grid-state');
+    const items = result['fasp.grid-state']?.state?.items || {};
+    return !items['keyboard-delete'];
+  });
+  await expectCount(page.locator('.sortable-tile[data-tile-id="keyboard-delete"]'), 0, 'Delete should remove the focused tile');
+
+  await page.keyboard.press('Control+K');
+  await page.waitForTimeout(100);
+  const focusedAfterCtrlK = await page.evaluate(() => document.activeElement?.dataset.testid || '');
+  assert(focusedAfterCtrlK !== 'search-input', 'Ctrl+K should be left to the browser instead of focusing the page search');
+  await page.keyboard.down('Control');
+  await page.keyboard.press(';');
+  await page.keyboard.up('Control');
+  await page.waitForFunction(() => document.activeElement?.dataset.testid === 'search-input');
+}
+
 async function smokeTileContainersAndOpenTarget(page, baseUrl) {
   await clearAppData(page, baseUrl);
   await page.locator('[data-testid="add-tile-button"]').first().click();
@@ -848,6 +1046,140 @@ async function smokeTileContainersAndOpenTarget(page, baseUrl) {
   const windowOpen = await page.evaluate(() => window.__faspOpenedUrls[0]);
   assert(windowOpen.kind === 'window', 'New window open target should use the windows API');
   assert(windowOpen.url === 'https://window-target.example', 'New window target should keep the tile URL');
+}
+
+async function smokeFixedWidgetsAndWeatherCard(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await page.evaluate(async () => {
+    const now = Date.now();
+    const items = {};
+    const childrenIds = [];
+    for (let index = 0; index < 64; index += 1) {
+      const id = `fixed-widget-tile-${index}`;
+      childrenIds.push(id);
+      items[id] = {
+        id,
+        type: 'tile',
+        title: `Fixed Widget Tile ${index + 1}`,
+        url: `https://fixed-widget-${index}.example`,
+        source: 'manual',
+        createdAt: now,
+        updatedAt: now,
+        order: index,
+      };
+    }
+
+    localStorage.setItem('fasp-weather:testville', JSON.stringify({
+      version: 2,
+      text: 'Testville · +21° · Clear',
+      url: 'https://wttr.in/Testville?lang=ru',
+      location: 'Testville',
+      temp: '+21°',
+      condition: 'Clear',
+      icon: 'sun',
+      ts: Date.now(),
+    }));
+
+    await window.browser.storage.local.set({
+      'fasp-settings': {
+        showSearchBar: true,
+        showClock: true,
+        showWeather: true,
+        weatherLocation: 'Testville',
+        weatherDisplayMode: 'card',
+        searchBarWidth: 60,
+        searchResultLimit: 50,
+      },
+      'fasp.grid-state': {
+        schemaVersion: 3,
+        state: {
+          items,
+          containers: {
+            root: {
+              id: 'root',
+              title: 'Root',
+              childrenIds,
+              createdAt: now,
+              updatedAt: now,
+            },
+          },
+          rootContainerId: 'root',
+          currentContainerId: 'root',
+          containerStack: ['root'],
+          dragState: null,
+        },
+      },
+    });
+  });
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('[data-testid="tile-surface-root"]').waitFor({ state: 'visible' });
+  await page.locator('.weather-card').waitFor({ state: 'visible' });
+
+  const metrics = await page.evaluate(async () => {
+    const shell = document.querySelector('.tile-grid-shell');
+    const widgets = document.querySelector('.widgets-zone');
+    const weather = document.querySelector('.weather-card');
+    const beforeWidgetsRect = widgets?.getBoundingClientRect();
+    const beforeShellScrollTop = shell?.scrollTop || 0;
+    if (shell) shell.scrollTop = 360;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const afterWidgetsRect = widgets?.getBoundingClientRect();
+    const afterShellRect = shell?.getBoundingClientRect();
+    const widgetsContentBottom = widgets
+      ? Array.from(widgets.querySelectorAll('.search-form, .clock-widget, .weather-widget'))
+        .map((element) => element.getBoundingClientRect())
+        .filter((rect) => rect.width > 0 && rect.height > 0)
+        .reduce((bottom, rect) => Math.max(bottom, rect.bottom), afterWidgetsRect?.top ?? 0)
+      : 0;
+    const afterShellScrollTop = shell?.scrollTop || 0;
+    const appRoot = document.querySelector('.app-scroll-root');
+    if (shell) shell.scrollTop = shell.scrollHeight;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const weatherRect = weather?.getBoundingClientRect();
+    const tileRects = Array.from(document.querySelectorAll('[data-testid="tile-card"]'))
+      .map((tile) => tile.getBoundingClientRect())
+      .filter((rect) => rect.width > 0 && rect.height > 0);
+    const intersectsWeather = weatherRect
+      ? tileRects.some((rect) => !(
+        rect.right <= weatherRect.left
+        || rect.left >= weatherRect.right
+        || rect.bottom <= weatherRect.top
+        || rect.top >= weatherRect.bottom
+      ))
+      : true;
+
+    return {
+      shellScrollable: shell ? shell.scrollHeight > shell.clientHeight + 40 : false,
+      beforeShellScrollTop,
+      afterShellScrollTop,
+      appRootScrollTop: appRoot?.scrollTop || 0,
+      documentScrollTop: document.documentElement.scrollTop || document.body.scrollTop || 0,
+      widgetsTopBefore: beforeWidgetsRect?.top ?? null,
+      widgetsTopAfter: afterWidgetsRect?.top ?? null,
+      shellTop: afterShellRect?.top ?? 0,
+      widgetsContentBottom,
+      widgetsFixed: widgets ? getComputedStyle(widgets).position === 'fixed' : false,
+      weatherWidth: weatherRect?.width || 0,
+      weatherHeight: weatherRect?.height || 0,
+      shellPaddingBottom: shell ? parseFloat(getComputedStyle(shell).paddingBottom) : 0,
+      intersectsWeather,
+    };
+  });
+
+  assert(metrics.shellScrollable, 'Tile grid shell should be the scrollable region when many tiles exist');
+  assert(metrics.afterShellScrollTop > metrics.beforeShellScrollTop, 'Tile grid shell should scroll independently');
+  assert(metrics.appRootScrollTop === 0 && metrics.documentScrollTop === 0, 'Page root should stay fixed while tiles scroll');
+  assert(metrics.widgetsFixed, 'Top widgets should use fixed positioning');
+  assert(
+    Math.abs((metrics.widgetsTopBefore ?? 0) - (metrics.widgetsTopAfter ?? 0)) <= 1,
+    'Top widgets should not move when the tile grid scrolls'
+  );
+  assert(metrics.widgetsContentBottom > 0, 'Top widget content should be measurable');
+  assert(metrics.shellTop >= metrics.widgetsContentBottom - 1, 'Tile grid shell should start below the visible top widgets');
+  assert(metrics.weatherWidth <= 260 && metrics.weatherHeight <= 150, 'Weather card should stay compact near the tile grid');
+  assert(metrics.shellPaddingBottom >= metrics.weatherHeight + 40, 'Tile grid should reserve bottom scroll space for the weather card');
+  assert(!metrics.intersectsWeather, 'Weather card should not overlap visible tile cards at the bottom of the grid');
 }
 
 async function smokeBulkTileAccent(page, baseUrl) {
@@ -1400,7 +1732,9 @@ async function main() {
     await smokeStartupFolderState(page, baseUrl);
     await smokeTileTitleTooltip(page, baseUrl);
     await smokeContextMenuReadability(page, baseUrl);
+    await smokeKeyboardTileControls(page, baseUrl);
     await smokeTileContainersAndOpenTarget(page, baseUrl);
+    await smokeFixedWidgetsAndWeatherCard(page, baseUrl);
     await smokeBulkTileAccent(page, baseUrl);
     await smokeTileVisualReset(page, baseUrl);
     await smokeAdaptiveControlContrast(page, baseUrl);
@@ -1408,7 +1742,7 @@ async function main() {
     await smokeProfileTransfer(page, baseUrl);
 
     assert(failures.length === 0, `Browser errors during smoke run:\n${failures.join('\n')}`);
-    console.log('Smoke tests passed: Manifest Permissions, DnD, Custom Tile Icon, Local Generated Icon, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Context Menu Readability, Tile Containers/Open Target, Bulk Tile Accent, Tile Visual Reset, Adaptive Control Contrast, Startup Background Hydration, Profile Transfer');
+    console.log('Smoke tests passed: Manifest Permissions, DnD, Custom Tile Icon, Local Generated Icon, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Context Menu Readability, Keyboard Tile Controls, Tile Containers/Open Target, Fixed Widgets/Weather Card, Bulk Tile Accent, Tile Visual Reset, Adaptive Control Contrast, Startup Background Hydration, Profile Transfer');
   } finally {
     if (browser) await browser.close();
     await stopPreview(preview);

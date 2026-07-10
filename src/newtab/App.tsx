@@ -611,6 +611,7 @@ function SearchBar({
     >
       <input
         type="text"
+        data-testid="search-input"
         value={q}
         onChange={(e) => {
           setQ(e.target.value);
@@ -1043,6 +1044,27 @@ export default function App() {
     return () => browser.runtime.onMessage.removeListener(handleMessage);
   }, [syncBookmarks]);
 
+  useEffect(() => {
+    const handleSearchHotkey = (event: KeyboardEvent) => {
+      const isSearchHotkey = (event.key === ';' || event.code === 'Semicolon')
+        && (event.ctrlKey || event.metaKey)
+        && !event.altKey
+        && !event.shiftKey;
+      if (!isSearchHotkey) return;
+      if (showSettings) return;
+
+      const input = document.querySelector<HTMLInputElement>('[data-testid="search-input"]');
+      if (!input) return;
+
+      event.preventDefault();
+      input.focus();
+      input.select();
+    };
+
+    window.addEventListener('keydown', handleSearchHotkey);
+    return () => window.removeEventListener('keydown', handleSearchHotkey);
+  }, [showSettings]);
+
   // Alt+1..9 opens the Nth tile of the currently visible surface.
   useEffect(() => {
     const handleHotkey = (event: KeyboardEvent) => {
@@ -1162,7 +1184,7 @@ export default function App() {
         </div>
       </div>
 
-      <div className={`tile-grid-shell ${widgetsVisible ? 'tile-grid-shell-with-widgets' : ''}`}>
+      <div className={`tile-grid-shell ${widgetsVisible ? 'tile-grid-shell-with-widgets' : ''} ${weatherCard ? 'tile-grid-shell-with-weather-card' : ''}`}>
         <TileGrid />
       </div>
 

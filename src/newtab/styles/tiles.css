@@ -8,9 +8,71 @@
 }
 
 .sortable-tile:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--fasp-accent) 82%, white);
-  outline-offset: 3px;
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--fasp-accent) 22%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--fasp-accent) 70%, white);
+  outline-offset: 5px;
+  filter: brightness(1.16) saturate(1.12);
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.72),
+    0 0 0 10px color-mix(in srgb, var(--fasp-accent) 50%, transparent),
+    0 20px 52px color-mix(in srgb, var(--fasp-accent) 42%, transparent);
+}
+
+.sortable-tile:focus-visible .tile-card {
+  transform: translateY(-4px) scale(var(--fasp-tile-hover-scale));
+  border-color: color-mix(in srgb, var(--fasp-accent) 72%, white);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--fasp-accent) 64%, rgba(255, 255, 255, 0.32)),
+    0 18px 42px rgba(0, 0, 0, 0.36),
+    0 0 28px color-mix(in srgb, var(--fasp-accent) 34%, transparent);
+}
+
+.sortable-tile.keyboard-preview-active {
+  z-index: 24;
+}
+
+.tile-keyboard-preview-overlay {
+  position: fixed;
+  z-index: 95;
+  pointer-events: none;
+  transform-origin: center center;
+  transition:
+    left var(--keyboard-preview-duration, 460ms) cubic-bezier(0.22, 1, 0.36, 1),
+    top var(--keyboard-preview-duration, 460ms) cubic-bezier(0.22, 1, 0.36, 1),
+    width var(--keyboard-preview-duration, 460ms) cubic-bezier(0.22, 1, 0.36, 1),
+    height var(--keyboard-preview-duration, 460ms) cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 180ms ease,
+    filter var(--keyboard-preview-duration, 460ms) ease;
+  filter:
+    drop-shadow(0 30px 74px rgba(0, 0, 0, 0.54))
+    drop-shadow(0 0 46px color-mix(in srgb, var(--fasp-accent) 42%, transparent));
+}
+
+.tile-keyboard-preview-overlay .tile-card,
+.tile-keyboard-preview-overlay .tile-card:hover {
+  width: 100%;
+  height: 100%;
+  transform: none;
+  opacity: 1 !important;
+  cursor: default;
+  border-color: color-mix(in srgb, var(--fasp-accent) 72%, rgba(255, 255, 255, 0.28));
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--fasp-accent) 56%, rgba(255, 255, 255, 0.2)),
+    0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.tile-keyboard-preview-overlay .tile-preview {
+  object-fit: contain !important;
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.08), transparent 58%),
+    rgba(5, 8, 16, 0.78);
+}
+
+.tile-keyboard-preview-overlay .tile-preview-shade {
+  background: linear-gradient(180deg, rgba(2, 6, 15, 0.04), rgba(2, 6, 15, 0.2)) !important;
+}
+
+.tile-keyboard-preview-closing {
+  opacity: 0.96;
 }
 
 /* First-run onboarding panel on an empty root surface */

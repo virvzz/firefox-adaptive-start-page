@@ -18,14 +18,19 @@
 @media (max-width: 720px) {
   .widgets-zone-visible {
     padding-top: 72px;
+    max-height: min(260px, 48vh);
   }
 
   .tile-grid-shell {
-    padding-top: 78px;
+    top: 78px;
   }
 
   .tile-grid-shell-with-widgets {
-    padding-top: 8px;
+    top: 168px;
+  }
+
+  .tile-grid-shell-with-weather-card {
+    padding-bottom: 190px;
   }
 
   .clock-widget {

@@ -26,6 +26,8 @@ interface ContextMenuProps {
   parentId?: string | null;
   onClose: () => void;
   onOpenFolder?: (tile: Tile) => void;
+  initialConfirmDelete?: boolean;
+  onDeleteComplete?: () => void;
 }
 
 const CONTEXT_EDGE_GAP = 12;
@@ -273,7 +275,16 @@ function MenuItem({
   );
 }
 
-export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFolder }: ContextMenuProps) {
+export function ContextMenu({
+  x,
+  y,
+  tileId,
+  parentId = null,
+  onClose,
+  onOpenFolder,
+  initialConfirmDelete = false,
+  onDeleteComplete,
+}: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const iconFileRef = useRef<HTMLInputElement>(null);
@@ -306,7 +317,7 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
   const [showRename, setShowRename] = useState(false);
   const [showImage, setShowImage] = useState(false);
   const [showColor, setShowColor] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(initialConfirmDelete);
   const [showMoveFolders, setShowMoveFolders] = useState(false);
   const [showContainers, setShowContainers] = useState(false);
   const [containers, setContainers] = useState<FirefoxContainer[]>([]);
@@ -1196,14 +1207,14 @@ export function ContextMenu({ x, y, tileId, parentId = null, onClose, onOpenFold
 
   if (showConfirm) {
     return renderFloating(
-      <div ref={ref} className="context-menu context-panel context-panel-danger glass-strong rounded-xl p-4 w-64 shadow-2xl text-white" style={wrapperStyle}>
+      <div ref={ref} data-testid="context-delete-confirm" className="context-menu context-panel context-panel-danger glass-strong rounded-xl p-4 w-64 shadow-2xl text-white" style={wrapperStyle}>
         <p className="text-sm font-medium text-white/78">{deletePrompt}</p>
         <p className="mt-1 mb-3 text-xs text-white/42">{deleteDescription}</p>
         <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60 transition-colors duration-300 hover:bg-white/10">
+          <button data-testid="context-delete-cancel" onClick={onClose} className="flex-1 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60 transition-colors duration-300 hover:bg-white/10">
             Отмена
           </button>
-          <button onClick={() => { if (tileId) { void deleteTile(tileId); onClose(); } }} className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-300 ${isReferenceRoot ? 'bg-white/[0.14] text-white hover:bg-white/[0.2]' : 'bg-red-500/20 text-red-200 hover:bg-red-500/35'}`}>
+          <button data-testid="context-delete-accept" onClick={() => { if (tileId) { void deleteTile(tileId).then(onDeleteComplete); onClose(); } }} className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-300 ${isReferenceRoot ? 'bg-white/[0.14] text-white hover:bg-white/[0.2]' : 'bg-red-500/20 text-red-200 hover:bg-red-500/35'}`}>
             {deleteLabel}
           </button>
         </div>

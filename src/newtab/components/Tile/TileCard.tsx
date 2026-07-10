@@ -21,6 +21,7 @@ interface TileCardProps {
   folderCreatePartner?: Tile | null;
   folderPreviewItems?: Tile[];
   preferFaviconOnly?: boolean;
+  forcePagePreview?: boolean;
   onOpenFolder?: (tile: Tile) => void;
 }
 
@@ -69,6 +70,7 @@ export const TileCard = memo(function TileCard({
   folderCreatePartner,
   folderPreviewItems = [],
   preferFaviconOnly = false,
+  forcePagePreview = false,
   onOpenFolder,
 }: TileCardProps) {
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -81,7 +83,7 @@ export const TileCard = memo(function TileCard({
 
   useEffect(() => {
     setPreviewIndex(0);
-  }, [tile.customImage, tile.customImageAssetId, tile.thumbnail, tile.url]);
+  }, [forcePagePreview, tile.customImage, tile.customImageAssetId, tile.thumbnail, tile.url]);
 
   const cancelTitleTooltipTimer = useCallback(() => {
     if (titleTooltipTimerRef.current !== null) {
@@ -171,6 +173,14 @@ export const TileCard = memo(function TileCard({
   );
 
   const previewCandidates = useMemo(() => {
+    if (forcePagePreview) {
+      if (!tile.url) return [];
+      return [
+        allowImageSource(tile.thumbnail) ? tile.thumbnail : undefined,
+        getScreenshotThumbnailUrl(tile.url),
+        getScreenshotThumbnailFallbackUrl(tile.url),
+      ].filter((src): src is string => Boolean(src));
+    }
     if (tile.customImage) return [tile.customImage];
     if (customImageAssetUrl) return [customImageAssetUrl];
     if (tile.dominantColor) return [];
@@ -183,12 +193,12 @@ export const TileCard = memo(function TileCard({
       getScreenshotThumbnailUrl(tile.url),
       getScreenshotThumbnailFallbackUrl(tile.url),
     ].filter((src): src is string => Boolean(src));
-  }, [allowImageSource, customImageAssetUrl, tile.customImage, tile.dominantColor, tile.thumbnail, tile.url]);
+  }, [allowImageSource, customImageAssetUrl, forcePagePreview, tile.customImage, tile.dominantColor, tile.thumbnail, tile.url]);
 
   const tileVisualMode = settings.tileVisualMode || 'mixed';
   const tileAccentColor = tile.tileAccentColor;
   const containerBadgeColor = getContainerColor(tile.containerColor);
-  const shouldUsePreview = !preferFaviconOnly && tileVisualMode !== 'favicon';
+  const shouldUsePreview = forcePagePreview || (!preferFaviconOnly && tileVisualMode !== 'favicon');
   const previewSrc = shouldUsePreview ? previewCandidates[previewIndex] : undefined;
   const markIconSourceFailed = useCallback((src: string) => {
     if (!src) return;

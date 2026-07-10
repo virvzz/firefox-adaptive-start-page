@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   closestCenter,
   DndContext,
@@ -81,6 +81,45 @@ interface TileSurfaceProps {
   openOriginRect?: DebugRect | null;
 }
 
+const KEYBOARD_PREVIEW_ANIMATION_MS = 460;
+const KEYBOARD_PREVIEW_EDGE_PADDING = 16;
+
+type KeyboardPreviewPhase = 'opening' | 'open' | 'closing';
+
+interface KeyboardPreviewState {
+  tileId: string;
+  fromRect: DebugRect;
+  phase: KeyboardPreviewPhase;
+}
+
+function isEditableKeyboardTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tagName = target.tagName;
+  return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || target.isContentEditable;
+}
+
+function isAddTileModalKeyboardTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && Boolean(target.closest('[data-testid="add-tile-modal"]'));
+}
+
+function getKeyboardPreviewTargetRect() {
+  const availableWidth = Math.max(1, window.innerWidth - KEYBOARD_PREVIEW_EDGE_PADDING * 2);
+  const availableHeight = Math.max(1, window.innerHeight - KEYBOARD_PREVIEW_EDGE_PADDING * 2);
+  const side = Math.min(
+    Math.max(286, Math.min(window.innerWidth, window.innerHeight) * 0.57),
+    availableWidth,
+    availableHeight,
+    680
+  );
+
+  return {
+    left: Math.round((window.innerWidth - side) / 2),
+    top: Math.round((window.innerHeight - side) / 2),
+    width: Math.round(side),
+    height: Math.round(side),
+  };
+}
+
 // Shared drag types, DOM helpers, and the cross-surface drag context live in
 // ./surfaceHelpers; the sortable wrapper and the debug overlay are extracted
 // into ./SortableTile and ./TileDebugOverlay.
@@ -115,7 +154,9 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
     x: number;
     y: number;
     tileId?: string;
+    initialConfirmDelete?: boolean;
   } | null>(null);
+  const [keyboardPreview, setKeyboardPreview] = useState<KeyboardPreviewState | null>(null);
   const dropIntentTimer = useRef<number | null>(null);
   const activeDropIntent = useRef<DropIntent>(null);
   const pendingDropIntent = useRef<Exclude<DropIntent, null> | null>(null);
@@ -141,9 +182,38 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
   const draggingOutsideFolder = useRef(false);
   const handoffFolderIds = useRef<Set<string>>(new Set());
   const folderCloseTimer = useRef<number | null>(null);
+  const didAutoFocusFolder = useRef(false);
+  const pendingDeleteFocusIndex = useRef<number | null>(null);
+  const keyboardPreviewTimer = useRef<number | null>(null);
   const tileSurfaceRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const folderPanelRef = useRef<HTMLDivElement>(null);
+
+  const clearKeyboardPreviewTimer = useCallback(() => {
+    if (keyboardPreviewTimer.current !== null) {
+      window.clearTimeout(keyboardPreviewTimer.current);
+      keyboardPreviewTimer.current = null;
+    }
+  }, []);
+
+  const closeKeyboardPreview = useCallback((animated = true) => {
+    clearKeyboardPreviewTimer();
+    if (!animated) {
+      setKeyboardPreview(null);
+      return;
+    }
+
+    setKeyboardPreview((current) => {
+      if (!current) return current;
+      if (current.phase === 'closing') return current;
+      return { ...current, phase: 'closing' };
+    });
+
+    keyboardPreviewTimer.current = window.setTimeout(() => {
+      keyboardPreviewTimer.current = null;
+      setKeyboardPreview((current) => (current?.phase === 'closing' ? null : current));
+    }, KEYBOARD_PREVIEW_ANIMATION_MS);
+  }, [clearKeyboardPreviewTimer]);
 
   useEffect(() => {
     const eventName = getTileDebugOverlayChangeEventName();
@@ -161,7 +231,8 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
       window.clearTimeout(folderCloseTimer.current);
       folderCloseTimer.current = null;
     }
-  }, []);
+    clearKeyboardPreviewTimer();
+  }, [clearKeyboardPreviewTimer]);
 
   useEffect(() => () => {
     if (level === 0) dispatchDndActive(false);
@@ -445,6 +516,7 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
   }, []);
 
   const handleClickCapture = useCallback((event: React.MouseEvent) => {
+    closeKeyboardPreview();
     if (performance.now() > suppressClickUntil.current) return;
 
     const target = event.target as HTMLElement;
@@ -462,7 +534,7 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
 
     event.preventDefault();
     event.stopPropagation();
-  }, [getGeometryForLog, level, parentId]);
+  }, [closeKeyboardPreview, getGeometryForLog, level, parentId]);
 
   useEffect(() => {
     if (!isTileDebugEnabled()) return;
@@ -903,6 +975,7 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
     const nextActiveId = String(event.active.id);
     const sourceContext = getDragSurfaceContext(nextActiveId);
     setContextMenu(null);
+    closeKeyboardPreview(false);
     if (dropIntentTimer.current !== null) {
       window.clearTimeout(dropIntentTimer.current);
       dropIntentTimer.current = null;
@@ -950,6 +1023,7 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
     }
   }, [
     captureDragTileRects,
+    closeKeyboardPreview,
     getDragFrameForLog,
     getDragSurfaceContext,
     getGeometryForLog,
@@ -1547,12 +1621,13 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
       tileId: tileEl?.getAttribute('data-tile-id') || null,
       geometry: getGeometryForLog(),
     });
+    closeKeyboardPreview();
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
       tileId: tileEl?.getAttribute('data-tile-id') || undefined,
     });
-  }, [getGeometryForLog, level, parentId]);
+  }, [closeKeyboardPreview, getGeometryForLog, level, parentId]);
 
   useEffect(() => {
     if (!isTileDebugEnabled()) return;
@@ -1643,21 +1718,128 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
     ? closingOriginRect || openOriginRect || null
     : openOriginRect || null;
   const folderAnimationStyle = getFolderAnimationStyle(folderAnimationOrigin);
+  const keyboardPreviewTile = keyboardPreview ? itemById.get(keyboardPreview.tileId) || null : null;
+  const keyboardPreviewTargetRect = keyboardPreview ? getKeyboardPreviewTargetRect() : null;
+  const keyboardPreviewRect = keyboardPreview
+    ? keyboardPreview.phase === 'open'
+      ? keyboardPreviewTargetRect
+      : keyboardPreview.fromRect
+    : null;
+  const keyboardPreviewStyle = keyboardPreviewRect
+    ? {
+        left: `${keyboardPreviewRect.left}px`,
+        top: `${keyboardPreviewRect.top}px`,
+        width: `${keyboardPreviewRect.width}px`,
+        height: `${keyboardPreviewRect.height}px`,
+        '--keyboard-preview-duration': `${KEYBOARD_PREVIEW_ANIMATION_MS}ms`,
+      } as CSSProperties & { '--keyboard-preview-duration': string }
+    : undefined;
 
-  // Arrow keys move focus across the grid of this surface (including the
-  // trailing add button); Enter/Space activation lives on the tile wrapper.
-  const handleSurfaceArrowNav = (event: React.KeyboardEvent<HTMLDivElement>) => {
+  const getKeyboardItems = useCallback(() => {
+    const grid = tileSurfaceRef.current?.querySelector(':scope > .tile-grid');
+    if (!grid) return [] as HTMLElement[];
+    return Array.from(
+      grid.querySelectorAll<HTMLElement>(':scope > .sortable-tile, :scope > [data-testid="add-tile-button"]')
+    );
+  }, []);
+
+  const focusKeyboardItemAt = useCallback((index: number) => {
+    window.requestAnimationFrame(() => {
+      const items = getKeyboardItems();
+      if (items.length === 0) return;
+      items[Math.min(Math.max(index, 0), items.length - 1)]?.focus();
+    });
+  }, [getKeyboardItems]);
+
+  const openKeyboardPreview = useCallback((tile: Tile) => {
+    if (keyboardPreview?.tileId === tile.id && keyboardPreview.phase !== 'closing') {
+      closeKeyboardPreview();
+      return;
+    }
+
+    const fromRect = getTileDebugRect(tile.id);
+    if (!fromRect) return;
+    clearKeyboardPreviewTimer();
+    setContextMenu(null);
+    setKeyboardPreview({ tileId: tile.id, fromRect, phase: 'opening' });
+    window.requestAnimationFrame(() => {
+      setKeyboardPreview((current) => (
+        current?.tileId === tile.id && current.phase === 'opening'
+          ? { ...current, phase: 'open' }
+          : current
+      ));
+    });
+  }, [clearKeyboardPreviewTimer, closeKeyboardPreview, keyboardPreview]);
+
+  useEffect(() => {
+    if (!parentId || didAutoFocusFolder.current) return undefined;
+    didAutoFocusFolder.current = true;
+
+    const frame = window.requestAnimationFrame(() => {
+      getKeyboardItems()[0]?.focus();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [getKeyboardItems, parentId]);
+
+  useEffect(() => {
+    if (!keyboardPreview) return undefined;
+    const closePreview = () => closeKeyboardPreview(false);
+    window.addEventListener('resize', closePreview);
+    window.addEventListener('scroll', closePreview, true);
+    return () => {
+      window.removeEventListener('resize', closePreview);
+      window.removeEventListener('scroll', closePreview, true);
+    };
+  }, [closeKeyboardPreview, keyboardPreview]);
+
+  const handleSurfaceKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const { key } = event;
-    if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'ArrowUp' && key !== 'ArrowDown') return;
     const target = event.target as HTMLElement;
+    const isTileTarget = target instanceof HTMLElement && target.classList.contains('sortable-tile');
+
+    if (key === 'Escape') {
+      if (isEditableKeyboardTarget(event.target)) return;
+      if (isAddTileModalKeyboardTarget(event.target)) return;
+      event.preventDefault();
+      if (contextMenu) {
+        setContextMenu(null);
+        return;
+      }
+      if (keyboardPreview) {
+        closeKeyboardPreview();
+        return;
+      }
+      if (parentId) {
+        requestCloseSelf('keyboard-escape');
+        return;
+      }
+      if (folderOpen) closeOpenFolder('keyboard-escape');
+      return;
+    }
+
+    if (key === 'Delete' && isTileTarget) {
+      const tileId = target.dataset.tileId;
+      if (!tileId || isEditableKeyboardTarget(event.target)) return;
+      const items = getKeyboardItems();
+      const index = Math.max(0, items.indexOf(target));
+      const rect = getTileDebugRect(tileId);
+      event.preventDefault();
+      closeKeyboardPreview();
+      pendingDeleteFocusIndex.current = index;
+      setContextMenu({
+        x: rect?.center.x ?? 24,
+        y: rect?.center.y ?? 24,
+        tileId,
+        initialConfirmDelete: true,
+      });
+      return;
+    }
+
+    if (key !== 'ArrowLeft' && key !== 'ArrowRight' && key !== 'ArrowUp' && key !== 'ArrowDown') return;
     if (!(target instanceof HTMLElement)) return;
     if (!target.classList.contains('sortable-tile') && target.dataset.testid !== 'add-tile-button') return;
 
-    const grid = tileSurfaceRef.current?.querySelector(':scope > .tile-grid');
-    if (!grid) return;
-    const items = Array.from(
-      grid.querySelectorAll<HTMLElement>(':scope > .sortable-tile, :scope > [data-testid="add-tile-button"]')
-    );
+    const items = getKeyboardItems();
     const index = items.indexOf(target);
     if (index === -1) return;
 
@@ -1669,6 +1851,7 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
 
     if (next < 0 || next >= items.length || next === index) return;
     event.preventDefault();
+    closeKeyboardPreview();
     items[next].focus();
   };
 
@@ -1683,7 +1866,7 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
       data-folder-title={title || ''}
       onClickCapture={handleClickCapture}
       onContextMenu={handleContextMenu}
-      onKeyDown={handleSurfaceArrowNav}
+      onKeyDown={handleSurfaceKeyDown}
     >
       {level === 0 && !parentId && !tilesLoading && surfaceTiles.length === 0 && (
         <section className="tile-surface-onboarding glass-strong" data-testid="onboarding-panel">
@@ -1737,7 +1920,9 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
                 suppressLayoutTransform={Boolean(renderedDropIntent || renderedPendingCreateTargetId)}
                 isContextMenuDimmed={shouldUseContextMenuFocus && contextMenuTileId !== tile.id}
                 isContextMenuTarget={shouldUseContextMenuFocus && contextMenuTileId === tile.id}
+                isKeyboardPreview={keyboardPreview?.tileId === tile.id}
                 onOpenFolder={requestOpenFolder}
+                onPreviewTile={openKeyboardPreview}
               />
             ))}
             <button
@@ -1775,14 +1960,38 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
       {contextMenu && (
         <Suspense fallback={null}>
           <ContextMenu
+            key={`${contextMenu.tileId || 'surface'}:${contextMenu.initialConfirmDelete ? 'delete' : 'menu'}:${Math.round(contextMenu.x)}:${Math.round(contextMenu.y)}`}
             x={contextMenu.x}
             y={contextMenu.y}
             tileId={contextMenu.tileId}
             parentId={parentId}
+            initialConfirmDelete={contextMenu.initialConfirmDelete}
+            onDeleteComplete={contextMenu.initialConfirmDelete ? () => {
+              const focusIndex = pendingDeleteFocusIndex.current ?? 0;
+              pendingDeleteFocusIndex.current = null;
+              focusKeyboardItemAt(focusIndex);
+            } : undefined}
             onOpenFolder={requestOpenFolder}
             onClose={() => setContextMenu(null)}
           />
         </Suspense>
+      )}
+
+      {keyboardPreview && keyboardPreviewTile && keyboardPreviewStyle && (
+        <div
+          className={`tile-keyboard-preview-overlay tile-keyboard-preview-${keyboardPreview.phase}`}
+          data-testid="tile-keyboard-preview-overlay"
+          style={keyboardPreviewStyle}
+          aria-hidden="true"
+        >
+          <TileCard
+            tile={keyboardPreviewTile}
+            childCount={childCounts.get(keyboardPreviewTile.id) || 0}
+            folderPreviewItems={(folderPreviewItems.get(keyboardPreviewTile.id) || []).slice(0, 4)}
+            preferFaviconOnly={false}
+            forcePagePreview
+          />
+        </div>
       )}
     </div>
   );

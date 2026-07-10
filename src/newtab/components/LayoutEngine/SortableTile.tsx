@@ -16,7 +16,9 @@ export function SortableTile({
   suppressLayoutTransform,
   isContextMenuDimmed,
   isContextMenuTarget,
+  isKeyboardPreview,
   onOpenFolder,
+  onPreviewTile,
 }: {
   tile: Tile;
   childCount: number;
@@ -29,7 +31,9 @@ export function SortableTile({
   suppressLayoutTransform: boolean;
   isContextMenuDimmed: boolean;
   isContextMenuTarget: boolean;
+  isKeyboardPreview: boolean;
   onOpenFolder: (tile: Tile) => void;
+  onPreviewTile: (tile: Tile) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: tile.id });
 
@@ -46,15 +50,20 @@ export function SortableTile({
     <div
       ref={setNodeRef}
       style={style}
-      className={`sortable-tile ${isDragging ? 'is-dragging' : ''} ${isContextMenuDimmed ? 'context-menu-dimmed' : ''} ${isContextMenuTarget ? 'context-menu-target' : ''}`}
+      className={`sortable-tile ${isDragging ? 'is-dragging' : ''} ${isContextMenuDimmed ? 'context-menu-dimmed' : ''} ${isContextMenuTarget ? 'context-menu-target' : ''} ${isKeyboardPreview ? 'keyboard-preview-active' : ''}`}
       {...attributes}
       {...listeners}
       aria-label={tile.title}
+      data-tile-id={tile.id}
       onKeyDown={(event) => {
         if (event.key !== 'Enter' && event.key !== ' ') return;
         if (event.target !== event.currentTarget) return;
         event.preventDefault();
-        event.currentTarget.querySelector<HTMLElement>('[data-testid="tile-card"]')?.click();
+        if (event.key === 'Enter') {
+          event.currentTarget.querySelector<HTMLElement>('[data-testid="tile-card"]')?.click();
+          return;
+        }
+        onPreviewTile(tile);
       }}
     >
       <TileCard
