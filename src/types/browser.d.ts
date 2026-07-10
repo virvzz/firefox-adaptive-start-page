@@ -77,6 +77,18 @@ declare namespace browser {
     function getManifest(): { version?: string };
     const onMessage: Event<(message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => void | boolean | Promise<unknown>>;
   }
+  namespace permissions {
+    type DataCollectionPermission = 'browsingActivity' | 'bookmarksInfo' | 'locationInfo' | 'technicalAndInteraction';
+
+    interface Permissions {
+      origins?: string[];
+      permissions?: string[];
+      data_collection?: DataCollectionPermission[];
+    }
+
+    function getAll(): Promise<Permissions>;
+    function request(permissions: Permissions): Promise<boolean>;
+  }
   namespace sessions {
     interface SessionTab {
       title?: string;

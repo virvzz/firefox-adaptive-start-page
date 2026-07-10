@@ -34,6 +34,12 @@ interface SettingsState {
 }
 
 const STORAGE_KEY = 'fasp-settings';
+const EXTERNAL_PREVIEW_DATA_PERMISSIONS: browser.permissions.DataCollectionPermission[] = [
+  'browsingActivity',
+  'bookmarksInfo',
+];
+const WEATHER_DATA_PERMISSIONS: browser.permissions.DataCollectionPermission[] = ['locationInfo'];
+
 export const DEFAULT_SETTINGS: AppSettings = {
   borderRadiusDefault: 12,
   tileOpacityDefault: 0.9,
@@ -74,6 +80,28 @@ function clearWeatherCache(): void {
 
   for (const key of Object.keys(localStorage)) {
     if (key.startsWith('fasp-weather:')) localStorage.removeItem(key);
+  }
+}
+
+async function requestDataCollectionConsent(
+  permissions: browser.permissions.DataCollectionPermission[]
+): Promise<boolean> {
+  if (!permissions.length) return true;
+  if (typeof browser === 'undefined' || !browser.permissions?.getAll || !browser.permissions.request) {
+    return false;
+  }
+
+  try {
+    const current = await browser.permissions.getAll();
+    if (!('data_collection' in current)) return false;
+
+    const granted = new Set(current.data_collection || []);
+    const missing = permissions.filter((permission) => !granted.has(permission));
+    if (missing.length === 0) return true;
+
+    return await browser.permissions.request({ data_collection: missing });
+  } catch {
+    return false;
   }
 }
 
@@ -190,6 +218,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   setShowWeather: async (show) => {
+    if (show && !(await requestDataCollectionConsent(WEATHER_DATA_PERMISSIONS))) return;
     const newSettings = { ...get().settings, showWeather: show };
     set({ settings: newSettings });
     await saveSettings(newSettings);
@@ -250,6 +279,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   setExternalPreviewsEnabled: async (enabled) => {
+    if (enabled && !(await requestDataCollectionConsent(EXTERNAL_PREVIEW_DATA_PERMISSIONS))) return;
     const newSettings = { ...get().settings, externalPreviewsEnabled: enabled };
     set({ settings: newSettings });
     await saveSettings(newSettings);

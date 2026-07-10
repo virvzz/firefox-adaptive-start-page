@@ -43,11 +43,19 @@ npm.cmd ci
 
 ### Build the exact submitted extension package
 
-Run this from the source package root:
+For self-distribution signing, run this from the source package root:
 
 ```powershell
 $env:FASP_UPDATE_URL = 'https://virvzz.github.io/firefox-adaptive-start-page/updates.json'
 npm.cmd run release:package
+```
+
+For a future public/listed AMO submission, build the listed package instead.
+This package intentionally does not inject `update_url`, because AMO manages
+updates for listed add-ons:
+
+```powershell
+npm.cmd run release:package:listed
 ```
 
 The script performs all required build and packaging steps:
@@ -55,19 +63,22 @@ The script performs all required build and packaging steps:
 1. Runs `vite build`.
 2. Copies the production extension files from `dist/`.
 3. Injects `browser_specific_settings.gecko.update_url` into the packaged
-   manifest.
+   manifest only for self-distributed/unlisted builds when `FASP_UPDATE_URL` is
+   set.
 4. Creates the AMO upload archive with forward-slash zip entry names.
 5. Creates a matching source archive for review.
 
 Expected output files:
 
 ```text
-release/adaptive-start-page-0.1.5-unlisted.zip
-release/adaptive-start-page-0.1.5-source.zip
+release/adaptive-start-page-<version>-unlisted.zip
+release/adaptive-start-page-<version>-listed.zip
+release/adaptive-start-page-<version>-source.zip
 ```
 
-The `adaptive-start-page-0.1.5-unlisted.zip` file is the extension package
-submitted for self-distribution signing.
+The `*-unlisted.zip` file is the extension package submitted for
+self-distribution signing. The `*-listed.zip` file is for a future public AMO
+listing.
 
 ### Optional verification
 
@@ -90,7 +101,7 @@ directory that contains one).
 - No build-time secrets, API keys, remote code, or private services are required.
 - By default no tile URLs leave the browser: previews are rendered locally.
   Online thumbnails/favicons and the weather widget are opt-in settings that
-  are documented in the UI before enabling.
+  request Firefox optional data-collection consent before enabling.
 - The extension targets Firefox Desktop 142.0 and newer. Firefox for Android is
   not declared in `browser_specific_settings` because the new tab override and
   bookmark APIs used by this project are not supported there.

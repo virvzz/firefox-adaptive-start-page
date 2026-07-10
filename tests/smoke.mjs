@@ -112,8 +112,15 @@ function startPreview(port) {
 function smokeManifestPermissions() {
   const manifest = JSON.parse(readFileSync(join(rootDir, 'dist', 'manifest.json'), 'utf8'));
   const permissions = new Set(manifest.permissions || []);
+  const dataCollection = manifest.browser_specific_settings?.gecko?.data_collection_permissions || {};
+  const requiredData = new Set(dataCollection.required || []);
+  const optionalData = new Set(dataCollection.optional || []);
   assert(permissions.has('contextualIdentities'), 'Manifest should request contextualIdentities for Firefox containers');
   assert(permissions.has('cookies'), 'Manifest should request cookies so cookieStoreId can open container tabs');
+  assert(requiredData.has('none'), 'Manifest should declare no required data transmission at install time');
+  assert(optionalData.has('browsingActivity'), 'Manifest should declare optional browsing activity transmission for online previews');
+  assert(optionalData.has('bookmarksInfo'), 'Manifest should declare optional bookmarks info transmission for bookmark preview URLs');
+  assert(optionalData.has('locationInfo'), 'Manifest should declare optional location transmission for the weather widget');
 }
 
 function findInstalledChromium() {
@@ -204,6 +211,8 @@ const browserMockScript = () => {
   }
 
   window.__faspOpenedUrls = [];
+  window.__faspPermissionRequests = [];
+  const grantedDataCollection = new Set();
 
   window.browser = {
     storage: {
@@ -231,6 +240,22 @@ const browserMockScript = () => {
         async clear() {
           writeStorage({});
         },
+      },
+    },
+    permissions: {
+      async getAll() {
+        return {
+          origins: [],
+          permissions: ['bookmarks', 'contextualIdentities', 'cookies', 'sessions', 'storage', 'tabs', 'topSites'],
+          data_collection: Array.from(grantedDataCollection),
+        };
+      },
+      async request(request = {}) {
+        window.__faspPermissionRequests.push(clone(request));
+        for (const permission of request.data_collection || []) {
+          grantedDataCollection.add(permission);
+        }
+        return true;
       },
     },
     runtime: {
@@ -908,6 +933,32 @@ async function smokeKeyboardTileControls(page, baseUrl) {
     && document.activeElement?.dataset.tileId === 'keyboard-child'
   ));
 
+  await page.keyboard.press('Space');
+  await page.locator('[data-testid="tile-keyboard-preview-overlay"]').waitFor({ state: 'visible' });
+  await page.waitForTimeout(520);
+  const folderPreviewMetrics = await page.evaluate(() => {
+    const child = document.querySelector('.sortable-tile[data-tile-id="keyboard-child"]');
+    const overlay = document.querySelector('[data-testid="tile-keyboard-preview-overlay"]');
+    const overlayRect = overlay?.getBoundingClientRect();
+    const folderPanel = document.querySelector('[data-folder-panel]');
+    return {
+      childActive: child?.classList.contains('keyboard-preview-active') || false,
+      overlayParentIsBody: overlay?.parentElement === document.body,
+      overlayCenterX: overlayRect ? overlayRect.left + overlayRect.width / 2 : 0,
+      overlayCenterY: overlayRect ? overlayRect.top + overlayRect.height / 2 : 0,
+      viewportCenterX: window.innerWidth / 2,
+      viewportCenterY: window.innerHeight / 2,
+      panelClips: folderPanel ? getComputedStyle(folderPanel).overflow !== 'visible' : false,
+    };
+  });
+  assert(folderPreviewMetrics.childActive, 'Space preview should mark a focused tile inside a folder');
+  assert(folderPreviewMetrics.overlayParentIsBody, 'Folder Space preview should render outside the clipping folder panel');
+  assert(folderPreviewMetrics.panelClips, 'Folder preview smoke should cover a clipping folder panel');
+  assert(Math.abs(folderPreviewMetrics.overlayCenterX - folderPreviewMetrics.viewportCenterX) <= 3, 'Folder Space preview should animate to the horizontal viewport center');
+  assert(Math.abs(folderPreviewMetrics.overlayCenterY - folderPreviewMetrics.viewportCenterY) <= 3, 'Folder Space preview should animate to the vertical viewport center');
+  await page.keyboard.press('Escape');
+  await page.locator('[data-testid="tile-keyboard-preview-overlay"]').waitFor({ state: 'detached' });
+
   await page.keyboard.press('Escape');
   await page.locator('[data-testid="tile-surface-folder"][data-parent-id="keyboard-folder"]').waitFor({ state: 'detached' });
 
@@ -1005,6 +1056,50 @@ async function smokeKeyboardTileControls(page, baseUrl) {
   await page.keyboard.press(';');
   await page.keyboard.up('Control');
   await page.waitForFunction(() => document.activeElement?.dataset.testid === 'search-input');
+}
+
+async function smokeOptionalDataConsent(page, baseUrl) {
+  await clearAppData(page, baseUrl);
+  await page.locator('[data-testid="settings-button"]').click();
+  await page.locator('[data-testid="settings-modal"]').waitFor({ state: 'visible' });
+
+  await page.locator('[data-testid="settings-section-layout"]').click();
+  await page.locator('[data-testid="external-previews-toggle"]').click();
+  await page.waitForFunction(async () => {
+    const requests = window.__faspPermissionRequests || [];
+    const result = await window.browser.storage.local.get('fasp-settings');
+    return requests.some((request) => (
+      request.data_collection?.includes('browsingActivity')
+      && request.data_collection?.includes('bookmarksInfo')
+    )) && result['fasp-settings']?.externalPreviewsEnabled === true;
+  });
+
+  await page.locator('[data-testid="settings-section-widgets"]').click();
+  await page.locator('[data-testid="weather-widget-toggle"]').click();
+  await page.waitForFunction(async () => {
+    const requests = window.__faspPermissionRequests || [];
+    const result = await window.browser.storage.local.get('fasp-settings');
+    return requests.some((request) => request.data_collection?.includes('locationInfo'))
+      && result['fasp-settings']?.showWeather === true;
+  });
+
+  const consentState = await page.evaluate(async () => {
+    const result = await window.browser.storage.local.get('fasp-settings');
+    return {
+      settings: result['fasp-settings'],
+      requests: window.__faspPermissionRequests || [],
+    };
+  });
+
+  const previewRequest = consentState.requests.find((request) => (
+    request.data_collection?.includes('browsingActivity')
+    && request.data_collection?.includes('bookmarksInfo')
+  ));
+  const weatherRequest = consentState.requests.find((request) => request.data_collection?.includes('locationInfo'));
+  assert(previewRequest, 'Enabling online previews should request browsing and bookmark data consent');
+  assert(weatherRequest, 'Enabling weather should request location data consent');
+  assert(consentState.settings.externalPreviewsEnabled === true, 'Online previews should be enabled after consent is granted');
+  assert(consentState.settings.showWeather === true, 'Weather should be enabled after consent is granted');
 }
 
 async function smokeTileContainersAndOpenTarget(page, baseUrl) {
@@ -1733,6 +1828,7 @@ async function main() {
     await smokeTileTitleTooltip(page, baseUrl);
     await smokeContextMenuReadability(page, baseUrl);
     await smokeKeyboardTileControls(page, baseUrl);
+    await smokeOptionalDataConsent(page, baseUrl);
     await smokeTileContainersAndOpenTarget(page, baseUrl);
     await smokeFixedWidgetsAndWeatherCard(page, baseUrl);
     await smokeBulkTileAccent(page, baseUrl);
@@ -1742,7 +1838,7 @@ async function main() {
     await smokeProfileTransfer(page, baseUrl);
 
     assert(failures.length === 0, `Browser errors during smoke run:\n${failures.join('\n')}`);
-    console.log('Smoke tests passed: Manifest Permissions, DnD, Custom Tile Icon, Local Generated Icon, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Context Menu Readability, Keyboard Tile Controls, Tile Containers/Open Target, Fixed Widgets/Weather Card, Bulk Tile Accent, Tile Visual Reset, Adaptive Control Contrast, Startup Background Hydration, Profile Transfer');
+    console.log('Smoke tests passed: Manifest Permissions, DnD, Custom Tile Icon, Local Generated Icon, Reference/Clone, Theme Engine, Layout Settings, Startup Folder State, Tile Title Tooltip, Context Menu Readability, Keyboard Tile Controls, Optional Data Consent, Tile Containers/Open Target, Fixed Widgets/Weather Card, Bulk Tile Accent, Tile Visual Reset, Adaptive Control Contrast, Startup Background Hydration, Profile Transfer');
   } finally {
     if (browser) await browser.close();
     await stopPreview(preview);

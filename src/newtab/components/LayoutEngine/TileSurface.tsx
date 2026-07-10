@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import {
   closestCenter,
   DndContext,
@@ -1751,13 +1752,13 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
     });
   }, [getKeyboardItems]);
 
-  const openKeyboardPreview = useCallback((tile: Tile) => {
+  const openKeyboardPreview = useCallback((tile: Tile, sourceElement?: HTMLElement | null) => {
     if (keyboardPreview?.tileId === tile.id && keyboardPreview.phase !== 'closing') {
       closeKeyboardPreview();
       return;
     }
 
-    const fromRect = getTileDebugRect(tile.id);
+    const fromRect = getElementDebugRect(sourceElement) || getTileDebugRect(tile.id);
     if (!fromRect) return;
     clearKeyboardPreviewTimer();
     setContextMenu(null);
@@ -1977,7 +1978,7 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
         </Suspense>
       )}
 
-      {keyboardPreview && keyboardPreviewTile && keyboardPreviewStyle && (
+      {keyboardPreview && keyboardPreviewTile && keyboardPreviewStyle && typeof document !== 'undefined' && createPortal((
         <div
           className={`tile-keyboard-preview-overlay tile-keyboard-preview-${keyboardPreview.phase}`}
           data-testid="tile-keyboard-preview-overlay"
@@ -1992,7 +1993,7 @@ export function TileSurface({ parentId = null, title, level = 0, onClose, openOr
             forcePagePreview
           />
         </div>
-      )}
+      ), document.body)}
     </div>
   );
 

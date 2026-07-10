@@ -1010,6 +1010,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                     description="Загружает эскизы страниц и иконки с внешних сервисов (WordPress mShots, Google Favicons, thum.io). Адреса ваших плиток и закладок будут переданы этим сервисам. Выключено — используются только локальные превью: буква и цвет."
                     checked={settings.externalPreviewsEnabled}
                     onChange={setExternalPreviewsEnabled}
+                    testId="external-previews-toggle"
                   />
                 </section>
 
@@ -1403,6 +1404,7 @@ export function SettingsModal({ onClose }: SettingsModalProps) {
                   description="Текущая погода в вашем регионе"
                   checked={settings.showWeather}
                   onChange={setShowWeather}
+                  testId="weather-widget-toggle"
                 />
                 {settings.showWeather && (
                   <div className="mt-3 border-t border-white/5 pt-3">

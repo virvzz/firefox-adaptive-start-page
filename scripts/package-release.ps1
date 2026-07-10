@@ -1,5 +1,7 @@
 param(
-  [string]$UpdateUrl = $env:FASP_UPDATE_URL
+  [string]$UpdateUrl = $env:FASP_UPDATE_URL,
+  [ValidateSet('unlisted', 'listed')]
+  [string]$Distribution = $(if ($env:FASP_DISTRIBUTION) { $env:FASP_DISTRIBUTION } else { 'unlisted' })
 )
 
 $ErrorActionPreference = 'Stop'
@@ -112,10 +114,11 @@ if (-not (Test-Path -LiteralPath (Join-Path $dist 'manifest.json'))) {
 $manifest = Get-Content -LiteralPath (Join-Path $dist 'manifest.json') -Raw | ConvertFrom-Json
 $version = $manifest.version
 $baseName = "adaptive-start-page-$version"
+$distributionSuffix = if ($Distribution -eq 'listed') { 'listed' } else { 'unlisted' }
 
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 
-$extensionZip = Join-Path $releaseDir "$baseName-unlisted.zip"
+$extensionZip = Join-Path $releaseDir "$baseName-$distributionSuffix.zip"
 $sourceZip = Join-Path $releaseDir "$baseName-source.zip"
 
 Remove-PathIfExists $extensionStage
@@ -128,6 +131,11 @@ Copy-Item -Path (Join-Path $dist '*') -Destination $extensionStage -Recurse -For
 $unusedHtmlInputDir = Join-Path $extensionStage 'src'
 if (Test-Path -LiteralPath $unusedHtmlInputDir) {
   Remove-Item -LiteralPath $unusedHtmlInputDir -Recurse -Force
+}
+
+if ($Distribution -eq 'listed' -and $UpdateUrl) {
+  Write-Host 'Listed distribution selected; update_url will not be injected.'
+  $UpdateUrl = ''
 }
 
 if ($UpdateUrl) {
@@ -151,7 +159,11 @@ if ($UpdateUrl) {
   $stagedManifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $stagedManifestPath -Encoding UTF8
   Write-Host "Using update_url: $UpdateUrl"
 } else {
-  Write-Host 'No update_url configured. The signed XPI will require manual updates.'
+  if ($Distribution -eq 'listed') {
+    Write-Host 'No update_url configured. Listed AMO builds are updated by AMO.'
+  } else {
+    Write-Host 'No update_url configured. The signed XPI will require manual updates.'
+  }
 }
 
 Write-Host 'Creating AMO upload archive...'
@@ -166,10 +178,12 @@ foreach ($dir in $sourceDirs) {
 
 $sourceFiles = @(
   'AMO_SOURCE_README.md',
+  'AMO_LISTING.md',
   'LICENSE',
   'MIGRATION.md',
   'package-lock.json',
   'package.json',
+  'PRIVACY.md',
   'README.md',
   'RELEASE.md',
   'REVIEWER_NOTES.md',
@@ -195,4 +209,8 @@ Write-Host 'Release packages created:'
 Write-Host "  $extensionZip"
 Write-Host "  $sourceZip"
 Write-Host ''
-Write-Host 'Upload the *-unlisted.zip file to AMO for self-distribution signing.'
+if ($Distribution -eq 'listed') {
+  Write-Host 'Upload the *-listed.zip file to AMO for public listing.'
+} else {
+  Write-Host 'Upload the *-unlisted.zip file to AMO for self-distribution signing.'
+}

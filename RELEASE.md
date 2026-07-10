@@ -29,10 +29,21 @@ npm.cmd run release:package
 The script creates:
 
 - `release/adaptive-start-page-<version>-unlisted.zip`
+- `release/adaptive-start-page-<version>-listed.zip` when run with
+  `npm.cmd run release:package:listed`
 - `release/adaptive-start-page-<version>-source.zip`
 
 Upload the `unlisted.zip` file to AMO. If AMO asks for source code, upload the
 `source.zip` file.
+
+For public/listed AMO distribution, run:
+
+```powershell
+npm.cmd run release:package:listed
+```
+
+Upload the `listed.zip` file. Listed packages do not include
+`browser_specific_settings.gecko.update_url`; AMO manages listed add-on updates.
 
 If you run the command from Command Prompt or a shell where npm scripts are not
 blocked, `npm run release:package` works too.
@@ -64,3 +75,5 @@ the JSON manifest using `updates-template.json` as the starting point.
   AMO upload.
 - The archive uploaded to AMO must contain `manifest.json` at the archive root,
   not inside a `dist/` folder.
+- Keep `browser_specific_settings.gecko.data_collection_permissions` in sync with
+  any feature that transmits data outside the local browser.

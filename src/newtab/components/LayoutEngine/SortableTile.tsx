@@ -33,7 +33,7 @@ export function SortableTile({
   isContextMenuTarget: boolean;
   isKeyboardPreview: boolean;
   onOpenFolder: (tile: Tile) => void;
-  onPreviewTile: (tile: Tile) => void;
+  onPreviewTile: (tile: Tile, sourceElement?: HTMLElement | null) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: tile.id });
 
@@ -63,7 +63,7 @@ export function SortableTile({
           event.currentTarget.querySelector<HTMLElement>('[data-testid="tile-card"]')?.click();
           return;
         }
-        onPreviewTile(tile);
+        onPreviewTile(tile, event.currentTarget);
       }}
     >
       <TileCard
